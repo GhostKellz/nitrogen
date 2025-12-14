@@ -1,0 +1,44 @@
+[workspace]
+members = ["nitrogen-core", "nitrogen-cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Christopher 'CKEL / GhostKellz' Kelley"]
+license = "MIT OR Apache-2.0"
+description = "Wayland-native NVIDIA streaming for Discord and friends"
+repository = "https://github.com/ghostkellz/nitrogen"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.41", features = ["full"] }
+
+# Error handling
+thiserror = "2.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# D-Bus for portal access
+zbus = "5.1"
+ashpd = "0.10"
+
+# PipeWire
+pipewire = "0.8"
+libspa = "0.8"
+
+# FFmpeg for NVENC
+ffmpeg-next = "8.0"
+
+# Internal
+nitrogen-core = { path = "nitrogen-core" }

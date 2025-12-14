@@ -4,3 +4,6 @@ Cargo.lock
 TODO.md
 DEVELOPMENT_ROADMAP.md
 CLAUDE.md
+archive/
+target/
+
