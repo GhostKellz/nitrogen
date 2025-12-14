@@ -1,6 +1,6 @@
 <h1 align="center">
   <br>
-  <img src="https://raw.githubusercontent.com/ghostkellz/nitrogen/main/assets/nitrogen-logo.png" alt="Nitrogen" width="200">
+  <img src="assets/logo/nitrogen.png" alt="Nitrogen" width="200">
   <br>
   Nitrogen
   <br>
