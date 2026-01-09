@@ -90,6 +90,59 @@ impl NitrogenError {
             source: Box::new(self),
         }
     }
+
+    /// Get a user-friendly hint for how to resolve this error
+    pub fn user_hint(&self) -> Option<&'static str> {
+        match self {
+            Self::Portal(_) => Some(
+                "Ensure xdg-desktop-portal is running and your compositor supports screen sharing.\n\
+                 Try: systemctl --user restart xdg-desktop-portal"
+            ),
+            Self::PipeWire(_) => Some(
+                "Ensure PipeWire is running: systemctl --user status pipewire\n\
+                 Try: systemctl --user restart pipewire"
+            ),
+            Self::Encoder(_) => Some(
+                "Check that FFmpeg was compiled with NVENC support.\n\
+                 Try: ffmpeg -encoders | grep nvenc"
+            ),
+            Self::Nvenc(_) => Some(
+                "Ensure you have an NVIDIA GPU with NVENC support (GTX 600+ or Quadro K series+)\n\
+                 and the proprietary NVIDIA drivers installed.\n\
+                 Try: nvidia-smi"
+            ),
+            Self::Config(_) => Some(
+                "Check your configuration file at ~/.config/nitrogen/config.toml"
+            ),
+            Self::SourceNotFound(_) => Some(
+                "Use 'nitrogen list' to see available capture sources,\n\
+                 or omit the source to use the portal picker."
+            ),
+            Self::NoActiveSession => Some(
+                "No capture session is currently running. Start one with: nitrogen cast"
+            ),
+            Self::SessionAlreadyRunning => Some(
+                "A capture session is already running.\n\
+                 Use 'nitrogen stop' to stop it first, or 'nitrogen status' to check its state."
+            ),
+            Self::Unsupported(_) => None,
+            Self::Io(_) => None,
+            Self::WithContext { source, .. } => source.user_hint(),
+        }
+    }
+
+    /// Check if this is a common/recoverable error
+    pub fn is_user_recoverable(&self) -> bool {
+        matches!(
+            self,
+            Self::Portal(_)
+                | Self::PipeWire(_)
+                | Self::Config(_)
+                | Self::SourceNotFound(_)
+                | Self::NoActiveSession
+                | Self::SessionAlreadyRunning
+        )
+    }
 }
 
 /// Extension trait for adding context to Results

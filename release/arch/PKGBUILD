@@ -1,0 +1,82 @@
+# Maintainer: Christopher Kelley <ckelley@ghostkellz.sh>
+pkgname=nitrogen
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Wayland-native NVIDIA streaming for Discord - hardware-accelerated screen capture"
+arch=('x86_64')
+url="https://github.com/ghostkellz/nitrogen"
+license=('MIT' 'Apache-2.0')
+depends=(
+    'pipewire'
+    'libpipewire'
+    'xdg-desktop-portal'
+    'ffmpeg'
+    'v4l2loopback-dkms'
+    'nvidia-utils'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'clang'
+    'pkg-config'
+)
+optdepends=(
+    'xdg-desktop-portal-hyprland: for Hyprland support'
+    'xdg-desktop-portal-wlr: for wlroots compositors (Sway)'
+    'xdg-desktop-portal-gnome: for GNOME support'
+    'xdg-desktop-portal-kde: for KDE Plasma support'
+)
+provides=('nitrogen')
+conflicts=('nitrogen-git')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo build --release --locked
+}
+
+check() {
+    cd "$pkgname-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --release --locked || true
+}
+
+package() {
+    cd "$pkgname-$pkgver"
+
+    # Install binary
+    install -Dm755 "target/release/nitrogen" "$pkgdir/usr/bin/nitrogen"
+
+    # Install license
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Install systemd user service
+    install -Dm644 "examples/nitrogen.service" "$pkgdir/usr/lib/systemd/user/nitrogen.service"
+
+    # Install shell completions (if they exist)
+    if [ -f "target/release/completions/nitrogen.bash" ]; then
+        install -Dm644 "target/release/completions/nitrogen.bash" \
+            "$pkgdir/usr/share/bash-completion/completions/nitrogen"
+    fi
+    if [ -f "target/release/completions/nitrogen.zsh" ]; then
+        install -Dm644 "target/release/completions/nitrogen.zsh" \
+            "$pkgdir/usr/share/zsh/site-functions/_nitrogen"
+    fi
+    if [ -f "target/release/completions/nitrogen.fish" ]; then
+        install -Dm644 "target/release/completions/nitrogen.fish" \
+            "$pkgdir/usr/share/fish/vendor_completions.d/nitrogen.fish"
+    fi
+}
+
+post_install() {
+    echo ">>> Load v4l2loopback module:"
+    echo "    sudo modprobe v4l2loopback devices=1 video_nr=10 card_label='Nitrogen Camera' exclusive_caps=1"
+    echo ""
+    echo ">>> For persistent loading, add to /etc/modules-load.d/v4l2loopback.conf:"
+    echo "    v4l2loopback"
+    echo ""
+    echo ">>> And configure in /etc/modprobe.d/v4l2loopback.conf:"
+    echo "    options v4l2loopback devices=1 video_nr=10 card_label='Nitrogen Camera' exclusive_caps=1"
+}

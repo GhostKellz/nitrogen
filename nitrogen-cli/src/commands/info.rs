@@ -1,11 +1,25 @@
 //! Info command - show system information and capabilities
 
 use anyhow::Result;
+use nitrogen_core::capture;
+use nitrogen_core::config::Codec;
 use nitrogen_core::encode;
 
 /// Show system information and NVENC capabilities
 pub async fn info() -> Result<()> {
     println!("Nitrogen - System Information\n");
+
+    // GPU Information
+    println!("GPU Information:");
+    if let Some(gpu) = encode::get_gpu_info() {
+        println!("  Model:   {}", gpu.name);
+        println!("  VRAM:    {} MB", gpu.vram_mb);
+        println!("  Driver:  {}", gpu.driver_version);
+    } else {
+        println!("  No NVIDIA GPU detected (nvidia-smi not found or failed)");
+    }
+
+    println!();
 
     // Check NVENC availability
     println!("NVIDIA Encoding Support:");
@@ -21,8 +35,63 @@ pub async fn info() -> Result<()> {
         println!("  - FFmpeg compiled with NVENC support");
     } else {
         println!("  Available encoders:");
-        for encoder in encoders {
+        for encoder in &encoders {
             println!("    - {}", encoder);
+        }
+    }
+
+    println!();
+
+    // Codec capabilities
+    println!("Codec Capabilities:");
+    for codec in [Codec::H264, Codec::Hevc, Codec::Av1] {
+        let codec_name = match codec {
+            Codec::H264 => "H.264",
+            Codec::Hevc => "HEVC",
+            Codec::Av1 => "AV1",
+        };
+
+        if let Some(caps) = encode::get_encoder_capabilities(codec) {
+            println!("  {}:", codec_name);
+            println!("    Available:  yes");
+            println!(
+                "    B-frames:   {}",
+                if caps.b_frames { "yes" } else { "no" }
+            );
+            println!("    10-bit:     {}", if caps.bit_10 { "yes" } else { "no" });
+            println!(
+                "    Lookahead:  {}",
+                if caps.lookahead { "yes" } else { "no" }
+            );
+            println!("    Max res:    {}x{}", caps.max_width, caps.max_height);
+        } else {
+            println!("  {}: not available", codec_name);
+        }
+    }
+
+    println!();
+
+    // System services
+    println!("System Services:");
+    let (pw_running, pw_status) = capture::check_pipewire_status();
+    let (portal_running, portal_status) = capture::check_portal_status();
+
+    let pw_icon = if pw_running { "[OK]" } else { "[!!]" };
+    let portal_icon = if portal_running { "[OK]" } else { "[!!]" };
+
+    println!("  {} PipeWire:          {}", pw_icon, pw_status);
+    println!("  {} xdg-desktop-portal: {}", portal_icon, portal_status);
+
+    if !pw_running || !portal_running {
+        println!();
+        println!("  Troubleshooting:");
+        if !pw_running {
+            println!("    - PipeWire is required for screen capture");
+            println!("      Try: systemctl --user start pipewire");
+        }
+        if !portal_running {
+            println!("    - xdg-desktop-portal is required for screen selection");
+            println!("      Try: systemctl --user start xdg-desktop-portal");
         }
     }
 

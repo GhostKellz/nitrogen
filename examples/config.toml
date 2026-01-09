@@ -1,0 +1,48 @@
+# Nitrogen Configuration
+# Copy this file to ~/.config/nitrogen/config.toml
+#
+# All settings here serve as defaults. They can be overridden via CLI arguments.
+# For example: nitrogen cast --preset 720p60 --codec hevc
+
+[defaults]
+# Output preset determines resolution and framerate
+# Options: 720p30, 720p60, 1080p30, 1080p60, 1440p30, 1440p60, 1440p120, 4k30, 4k60, 4k120
+preset = "1080p60"
+
+# Video codec for encoding
+# Options:
+#   h264 - Most compatible, works everywhere (recommended)
+#   hevc - Better compression, newer applications
+#   av1  - Best compression, requires RTX 40-series or newer
+codec = "h264"
+
+# Target bitrate in kbps
+# Set to 0 for automatic bitrate based on preset
+# Suggested values:
+#   720p30:  2500 kbps    720p60:  4000 kbps
+#   1080p30: 4500 kbps    1080p60: 6000 kbps
+#   1440p60: 12000 kbps   4k60:    25000 kbps
+bitrate = 0
+
+# Low-latency mode optimizes for minimal delay
+# Recommended for Discord and real-time streaming
+# Disable for better quality if latency isn't critical
+low_latency = true
+
+[encoder]
+# Encoder quality preset
+# Options:
+#   fast    - Fastest encoding, lowest quality
+#   medium  - Balanced speed and quality (recommended)
+#   slow    - Slower encoding, better quality
+#   quality - Best quality, slowest encoding
+quality = "medium"
+
+# GPU index to use for encoding (0 = first GPU)
+# Use nvidia-smi to list available GPUs
+gpu = 0
+
+[camera]
+# Virtual camera name shown in applications like Discord, OBS, etc.
+# This is how your virtual camera will appear in application camera lists
+name = "Nitrogen Camera"

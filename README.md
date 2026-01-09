@@ -70,6 +70,26 @@
 </td>
 <td>
 
+**🔊 Audio Capture**
+- Desktop audio capture via PipeWire
+- Microphone input support
+- AAC and Opus encoding
+- Muxed into recordings
+
+</td>
+</tr>
+<tr>
+<td>
+
+**⌨️ Global Hotkeys**
+- System-wide keyboard shortcuts
+- Toggle/pause capture
+- Start/stop recording
+- Customizable bindings
+
+</td>
+<td>
+
 **✅ ToS Safe**
 - Acts as system-level video source
 - Never touches Discord's API
@@ -129,6 +149,12 @@ nitrogen cast --preset 1440p60
 
 # High quality 4K streaming
 nitrogen cast --preset 4k60 --codec hevc --bitrate 25000
+
+# Record to file with audio
+nitrogen cast --record ~/Videos/stream.mp4 --audio desktop
+
+# Stream with microphone
+nitrogen cast --audio mic
 ```
 
 ### Commands
@@ -163,45 +189,79 @@ nitrogen cast --preset 4k60 --codec hevc --bitrate 25000
 | **HEVC** | GTX 900+ | Better compression |
 | **AV1** | RTX 4000+ | Best compression |
 
+### Global Hotkeys
+
+Default hotkeys (requires `input` group membership):
+
+| Hotkey | Action |
+|--------|--------|
+| `Ctrl+Shift+F9` | Toggle capture on/off |
+| `Ctrl+Shift+F10` | Pause/resume capture |
+| `Ctrl+Shift+F11` | Toggle recording |
+
 ## How It Works
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Nitrogen Pipeline                        │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                 │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────────┐  │
-│  │   Portal     │    │    NVENC     │    │  Virtual Camera  │  │
-│  │   Capture    │───▶│    Encode    │───▶│   (PipeWire)     │  │
-│  │ (PipeWire)   │    │   (FFmpeg)   │    │                  │  │
-│  └──────────────┘    └──────────────┘    └──────────────────┘  │
-│        │                   │                      │             │
-│        ▼                   ▼                      ▼             │
-│   Screen/Window      H.264/HEVC/AV1       "Nitrogen Camera"    │
-│    Selection          Hardware            appears in apps      │
-│                       Encoding                                  │
-│                                                                 │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Nitrogen Pipeline                             │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────┐  │
+│  │   Portal     │    │    NVENC     │    │   Virtual Camera      │  │
+│  │   Capture    │───▶│    Encode    │───▶│   (PipeWire)          │  │
+│  │ (PipeWire)   │    │   (FFmpeg)   │    │                       │  │
+│  └──────────────┘    └──────────────┘    └───────────────────────┘  │
+│        │                   │                       │                 │
+│        ▼                   ▼                       ▼                 │
+│   Screen/Window      H.264/HEVC/AV1        "Nitrogen Camera"        │
+│    Selection          Hardware              appears in apps         │
+│                       Encoding                                       │
+│                                                                      │
+│  ┌──────────────┐    ┌──────────────┐    ┌───────────────────────┐  │
+│  │   Audio      │    │    Audio     │    │   File Recording      │  │
+│  │   Capture    │───▶│    Encode    │───▶│   (MP4/MKV)           │  │
+│  │ (PipeWire)   │    │  (AAC/Opus)  │    │                       │  │
+│  └──────────────┘    └──────────────┘    └───────────────────────┘  │
+│        │                   │                       │                 │
+│        ▼                   ▼                       ▼                 │
+│   Desktop Audio       Software              Muxed A/V               │
+│   + Microphone        Encoding              Recording               │
+│                                                                      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
 1. **Capture**: Uses xdg-desktop-portal to securely capture your screen
-2. **Encode**: NVIDIA NVENC provides hardware-accelerated video compression
-3. **Output**: Virtual camera appears in Discord as a selectable video source
+2. **Audio**: Captures desktop audio and/or microphone via PipeWire
+3. **Encode**: NVIDIA NVENC for video, AAC/Opus for audio
+4. **Output**: Virtual camera for streaming, optional file recording
 
 ## Configuration
 
 Create `~/.config/nitrogen/config.toml`:
 
 ```toml
-[default]
+[defaults]
 preset = "1080p60"
 codec = "h264"
 bitrate = 6000
-camera_name = "Nitrogen Camera"
 low_latency = true
+
+[camera]
+name = "Nitrogen Camera"
 
 [encoder]
 quality = "medium"  # fast, medium, slow, quality
+gpu = 0             # GPU index for multi-GPU systems
+
+[audio]
+source = "none"     # none, desktop, mic, both
+codec = "aac"       # aac, opus
+bitrate = 192       # kbps
+
+[hotkeys]
+toggle = "ctrl+shift+f9"
+pause = "ctrl+shift+f10"
+record = "ctrl+shift+f11"
 ```
 
 ## Troubleshooting

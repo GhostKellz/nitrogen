@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use nitrogen_core::capture;
-use tracing::info;
 
 /// List available capture sources
 pub async fn list_sources() -> Result<()> {
@@ -17,7 +16,10 @@ pub async fn list_sources() -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<20} {:<30} {:<10} {:<15}", "ID", "Name", "Type", "Resolution");
+    println!(
+        "{:<20} {:<30} {:<10} {:<15}",
+        "ID", "Name", "Type", "Resolution"
+    );
     println!("{}", "-".repeat(75));
 
     for source in sources {

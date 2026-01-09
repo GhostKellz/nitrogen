@@ -3,14 +3,12 @@
 //! Handles resolution changes and pixel format conversion
 //! between capture and encoding.
 
-use ffmpeg_next as ffmpeg;
 use ffmpeg_next::format::Pixel;
 use ffmpeg_next::software::scaling::{self, Flags};
 use ffmpeg_next::util::frame::video::Video;
 use tracing::debug;
 
 use crate::error::{NitrogenError, Result};
-use crate::types::FrameFormat;
 
 /// Frame scaler for resolution and format conversion
 pub struct FrameScaler {
@@ -76,6 +74,7 @@ impl FrameScaler {
 }
 
 /// Calculate scaled dimensions maintaining aspect ratio
+#[allow(dead_code)]
 pub fn calculate_scaled_size(
     src_width: u32,
     src_height: u32,
@@ -97,11 +96,8 @@ pub fn calculate_scaled_size(
 }
 
 /// Calculate crop region for aspect ratio conversion
-pub fn calculate_crop(
-    src_width: u32,
-    src_height: u32,
-    dst_aspect: f64,
-) -> (u32, u32, u32, u32) {
+#[allow(dead_code)]
+pub fn calculate_crop(src_width: u32, src_height: u32, dst_aspect: f64) -> (u32, u32, u32, u32) {
     let src_aspect = src_width as f64 / src_height as f64;
 
     if src_aspect > dst_aspect {

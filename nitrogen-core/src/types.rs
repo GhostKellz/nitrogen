@@ -212,3 +212,155 @@ pub enum FrameData {
     /// CPU-accessible memory
     Memory(Vec<u8>),
 }
+
+/// Audio sample format
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AudioSampleFormat {
+    /// 32-bit floating point, little-endian (interleaved)
+    #[default]
+    F32LE,
+    /// 16-bit signed integer, little-endian (interleaved)
+    S16LE,
+    /// 32-bit signed integer, little-endian (interleaved)
+    S32LE,
+}
+
+impl AudioSampleFormat {
+    /// Bytes per sample
+    pub fn bytes_per_sample(&self) -> usize {
+        match self {
+            AudioSampleFormat::F32LE => 4,
+            AudioSampleFormat::S16LE => 2,
+            AudioSampleFormat::S32LE => 4,
+        }
+    }
+}
+
+/// Audio format information
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AudioFormat {
+    /// Sample rate in Hz (e.g., 48000)
+    pub sample_rate: u32,
+    /// Number of channels (1=mono, 2=stereo)
+    pub channels: u32,
+    /// Audio sample format
+    pub format: AudioSampleFormat,
+}
+
+impl Default for AudioFormat {
+    fn default() -> Self {
+        Self {
+            sample_rate: 48000,
+            channels: 2,
+            format: AudioSampleFormat::F32LE,
+        }
+    }
+}
+
+/// Audio frame data
+#[derive(Debug, Clone)]
+pub struct AudioFrame {
+    /// Audio format
+    pub format: AudioFormat,
+    /// Sample data as f32 (converted from native format if needed)
+    pub samples: Vec<f32>,
+    /// Presentation timestamp in nanoseconds
+    pub pts: u64,
+    /// Number of samples per channel
+    pub sample_count: u32,
+}
+
+impl AudioFrame {
+    /// Create a new audio frame
+    pub fn new(format: AudioFormat, samples: Vec<f32>, pts: u64) -> Self {
+        let sample_count = (samples.len() / format.channels as usize) as u32;
+        Self {
+            format,
+            samples,
+            pts,
+            sample_count,
+        }
+    }
+
+    /// Duration of this frame in nanoseconds
+    pub fn duration_ns(&self) -> u64 {
+        (self.sample_count as u64 * 1_000_000_000) / self.format.sample_rate as u64
+    }
+}
+
+impl FrameData {
+    /// Try to map a DMA-BUF to CPU-accessible memory
+    ///
+    /// For DmaBuf variant, attempts to mmap the file descriptor and copy the data.
+    /// For Memory variant, just clones the existing data.
+    ///
+    /// # Arguments
+    /// * `size` - Expected size of the buffer in bytes
+    ///
+    /// # Returns
+    /// * `Ok(Vec<u8>)` - The frame data copied to a Vec
+    /// * `Err(String)` - Error message if mapping failed
+    pub fn try_map_dmabuf(&self, size: usize) -> Result<Vec<u8>, String> {
+        match self {
+            FrameData::Memory(data) => Ok(data.clone()),
+            FrameData::DmaBuf {
+                fd,
+                offset,
+                modifier: _,
+            } => {
+                use std::ptr;
+
+                // Safety: We're mapping a DMA-BUF fd that was passed to us from PipeWire.
+                // The fd is borrowed (not owned), so we must not close it.
+                // We use MAP_PRIVATE so our mapping is copy-on-write.
+                let map_size = size + (*offset as usize);
+
+                let ptr = unsafe {
+                    libc::mmap(
+                        ptr::null_mut(),
+                        map_size,
+                        libc::PROT_READ,
+                        libc::MAP_PRIVATE,
+                        *fd,
+                        0,
+                    )
+                };
+
+                if ptr == libc::MAP_FAILED {
+                    let err = std::io::Error::last_os_error();
+                    return Err(format!("mmap failed: {}", err));
+                }
+
+                // Copy the data out
+                let data_ptr = unsafe { (ptr as *const u8).add(*offset as usize) };
+                let mut buffer = vec![0u8; size];
+                unsafe {
+                    ptr::copy_nonoverlapping(data_ptr, buffer.as_mut_ptr(), size);
+                }
+
+                // Unmap the memory (but don't close the fd - it's borrowed)
+                let unmap_result = unsafe { libc::munmap(ptr, map_size) };
+                if unmap_result != 0 {
+                    // Log but don't fail - we already have the data
+                    let err = std::io::Error::last_os_error();
+                    tracing::warn!("munmap failed: {}", err);
+                }
+
+                Ok(buffer)
+            }
+        }
+    }
+
+    /// Check if this is a DMA-BUF frame
+    pub fn is_dmabuf(&self) -> bool {
+        matches!(self, FrameData::DmaBuf { .. })
+    }
+
+    /// Get the memory data if this is a Memory variant
+    pub fn as_memory(&self) -> Option<&[u8]> {
+        match self {
+            FrameData::Memory(data) => Some(data),
+            FrameData::DmaBuf { .. } => None,
+        }
+    }
+}

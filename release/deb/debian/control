@@ -1,0 +1,38 @@
+Source: nitrogen
+Section: video
+Priority: optional
+Maintainer: Christopher Kelley <ckelley@ghostkellz.sh>
+Build-Depends: debhelper-compat (= 13),
+               cargo,
+               rustc (>= 1.75),
+               libpipewire-0.3-dev,
+               libclang-dev,
+               pkg-config
+Standards-Version: 4.6.2
+Homepage: https://github.com/ghostkellz/nitrogen
+Vcs-Browser: https://github.com/ghostkellz/nitrogen
+Vcs-Git: https://github.com/ghostkellz/nitrogen.git
+Rules-Requires-Root: no
+
+Package: nitrogen
+Architecture: amd64
+Depends: ${shlibs:Depends},
+         ${misc:Depends},
+         pipewire,
+         xdg-desktop-portal,
+         ffmpeg,
+         v4l2loopback-dkms
+Recommends: xdg-desktop-portal-gnome | xdg-desktop-portal-kde | xdg-desktop-portal-wlr
+Suggests: nvidia-driver
+Description: Wayland-native NVIDIA streaming for Discord
+ Nitrogen is a hardware-accelerated screen capture and streaming tool
+ designed for NVIDIA GPUs on Wayland. It captures your screen via
+ PipeWire and xdg-desktop-portal, encodes with NVENC, and presents
+ as a virtual camera for Discord.
+ .
+ Features:
+  - Hardware-accelerated H.264/HEVC/AV1 encoding
+  - Low-latency PipeWire capture
+  - Virtual camera output via v4l2loopback
+  - Configurable quality presets (720p to 4K)
+  - File recording support

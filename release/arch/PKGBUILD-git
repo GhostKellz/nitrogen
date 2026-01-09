@@ -1,0 +1,63 @@
+# Maintainer: Christopher Kelley <ckelley@ghostkellz.sh>
+pkgname=nitrogen-git
+pkgver=r0.0.0
+pkgrel=1
+pkgdesc="Wayland-native NVIDIA streaming for Discord - hardware-accelerated screen capture (git version)"
+arch=('x86_64')
+url="https://github.com/ghostkellz/nitrogen"
+license=('MIT' 'Apache-2.0')
+depends=(
+    'pipewire'
+    'libpipewire'
+    'xdg-desktop-portal'
+    'ffmpeg'
+    'v4l2loopback-dkms'
+    'nvidia-utils'
+)
+makedepends=(
+    'rust'
+    'cargo'
+    'clang'
+    'pkg-config'
+    'git'
+)
+optdepends=(
+    'xdg-desktop-portal-hyprland: for Hyprland support'
+    'xdg-desktop-portal-wlr: for wlroots compositors (Sway)'
+    'xdg-desktop-portal-gnome: for GNOME support'
+    'xdg-desktop-portal-kde: for KDE Plasma support'
+)
+provides=('nitrogen')
+conflicts=('nitrogen')
+source=("git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd nitrogen
+    printf "r%s.%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short HEAD)"
+}
+
+build() {
+    cd nitrogen
+    export RUSTUP_TOOLCHAIN=stable
+    cargo build --release --locked
+}
+
+check() {
+    cd nitrogen
+    export RUSTUP_TOOLCHAIN=stable
+    cargo test --release --locked || true
+}
+
+package() {
+    cd nitrogen
+
+    # Install binary
+    install -Dm755 "target/release/nitrogen" "$pkgdir/usr/bin/nitrogen"
+
+    # Install license
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+
+    # Install systemd user service
+    install -Dm644 "examples/nitrogen.service" "$pkgdir/usr/lib/systemd/user/nitrogen.service"
+}

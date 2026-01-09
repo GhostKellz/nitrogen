@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpipewire-0.3-dev \
+            libspa-0.2-dev \
+            libclang-dev \
+            pkg-config \
+            ffmpeg \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-action@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Package binary
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/nitrogen dist/
+          cp LICENSE README.md dist/
+          cp -r examples dist/
+          cd dist
+          tar -czvf nitrogen-${{ github.ref_name }}-${{ matrix.target }}.tar.gz *
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nitrogen-${{ matrix.target }}
+          path: dist/nitrogen-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || contains(github.ref, 'rc') }}
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.tar.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  aur:
+    name: Update AUR
+    needs: release
+    runs-on: ubuntu-latest
+    if: "!contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc')"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Update PKGBUILD version
+        run: |
+          cd release/arch
+          sed -i "s/pkgver=.*/pkgver=${{ steps.version.outputs.version }}/" PKGBUILD
+          sed -i "s/pkgver = .*/pkgver = ${{ steps.version.outputs.version }}/" .SRCINFO
+
+      - name: Generate checksums
+        run: |
+          cd release/arch
+          # Download source and generate sha256sum
+          wget -q "https://github.com/ghostkellz/nitrogen/archive/v${{ steps.version.outputs.version }}.tar.gz"
+          SHA256=$(sha256sum "v${{ steps.version.outputs.version }}.tar.gz" | cut -d' ' -f1)
+          sed -i "s/sha256sums=.*/sha256sums=('$SHA256')/" PKGBUILD
+          rm "v${{ steps.version.outputs.version }}.tar.gz"
+
+      - name: Publish to AUR
+        uses: KSXGitHub/github-actions-deploy-aur@v2
+        if: ${{ env.AUR_SSH_PRIVATE_KEY != '' }}
+        with:
+          pkgname: nitrogen
+          pkgbuild: release/arch/PKGBUILD
+          commit_username: Christopher Kelley
+          commit_email: ckelley@ghostkellz.sh
+          ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}

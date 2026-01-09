@@ -5,14 +5,24 @@
 //! - Starting capture sessions
 //! - Getting PipeWire node IDs for stream connection
 
-use ashpd::desktop::screencast::{CursorMode, Screencast, SourceType};
+use ashpd::desktop::screencast::{CursorMode as AshpdCursorMode, Screencast, SourceType};
 use ashpd::{enumflags2::BitFlags, WindowIdentifier};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};
 
+use crate::config::CursorMode;
 use crate::error::{NitrogenError, Result};
 use crate::types::{SourceInfo, SourceKind};
+
+/// Convert our CursorMode to ashpd's CursorMode
+fn to_ashpd_cursor_mode(mode: CursorMode) -> AshpdCursorMode {
+    match mode {
+        CursorMode::Hidden => AshpdCursorMode::Hidden,
+        CursorMode::Embedded => AshpdCursorMode::Embedded,
+        CursorMode::Metadata => AshpdCursorMode::Metadata,
+    }
+}
 
 /// Portal-based capture session
 pub struct PortalCapture {
@@ -28,8 +38,6 @@ struct ActiveSession {
     pub node_id: u32,
     /// PipeWire file descriptor
     pub fd: std::os::fd::OwnedFd,
-    /// Source kind that was selected
-    pub source_kind: SourceKind,
 }
 
 impl PortalCapture {
@@ -49,6 +57,7 @@ impl PortalCapture {
     pub async fn start_session(
         &self,
         capture_type: CaptureType,
+        cursor_mode: CursorMode,
         multiple: bool,
     ) -> Result<SessionInfo> {
         let mut session_guard = self.session.lock().await;
@@ -75,7 +84,7 @@ impl PortalCapture {
         self.screencast
             .select_sources(
                 &session,
-                CursorMode::Embedded, // Show cursor in capture
+                to_ashpd_cursor_mode(cursor_mode),
                 source_type,
                 multiple,
                 None, // No restore token for now
@@ -122,14 +131,16 @@ impl PortalCapture {
             })
             .unwrap_or(SourceKind::Monitor);
 
-        let active = ActiveSession {
-            node_id,
-            fd,
-            source_kind,
-        };
+        let active = ActiveSession { node_id, fd };
 
         // Get stream dimensions if available
-        let (width, height) = stream.size().unwrap_or((1920, 1080));
+        let (width, height) = match stream.size() {
+            Some((w, h)) => (w, h),
+            None => {
+                warn!("Portal did not report stream dimensions, using default 1920x1080");
+                (1920, 1080)
+            }
+        };
 
         let info = SessionInfo {
             node_id,

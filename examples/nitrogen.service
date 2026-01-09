@@ -1,0 +1,35 @@
+# Nitrogen systemd user service
+#
+# Installation:
+#   mkdir -p ~/.config/systemd/user
+#   cp nitrogen.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable nitrogen
+#
+# Usage:
+#   systemctl --user start nitrogen   # Start the service
+#   systemctl --user stop nitrogen    # Stop the service
+#   systemctl --user status nitrogen  # Check status
+#   journalctl --user -u nitrogen     # View logs
+#
+# Note: This service runs nitrogen in daemon mode. You'll need to use
+# the portal picker when starting to select your capture source.
+
+[Unit]
+Description=Nitrogen - Wayland NVIDIA Streaming
+Documentation=https://github.com/ghostkellz/nitrogen
+After=graphical-session.target pipewire.service
+Requires=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/nitrogen cast --no-daemon
+ExecStop=/usr/bin/nitrogen stop
+Restart=on-failure
+RestartSec=5
+
+# Environment for Wayland
+Environment=XDG_RUNTIME_DIR=%t
+
+[Install]
+WantedBy=graphical-session.target
