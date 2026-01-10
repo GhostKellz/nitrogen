@@ -8,6 +8,11 @@
 
 <h4 align="center">Wayland-native NVIDIA streaming for Discord and friends.</h4>
 
+> **Warning**
+>
+> Nitrogen is under active development. APIs and CLI options may change.
+> Use in production at your own risk.
+
 <p align="center">
   <img src="https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=Red" alt="Rust">
   <img src="https://img.shields.io/badge/NVIDIA-76B900?style=for-the-badge&logo=nvidia&logoColor=Green" alt="NVIDIA">
@@ -98,6 +103,26 @@
 
 </td>
 </tr>
+<tr>
+<td>
+
+**🎬 Smooth Motion**
+- Frame interpolation (2x-4x)
+- NVIDIA Optical Flow (RTX 20+)
+- Scene change detection
+- Adaptive mode available
+
+</td>
+<td>
+
+**🔧 NVPrime Integration**
+- GPU capability detection
+- DLSS 4.5 aware
+- Power/thermal monitoring
+- Automatic NVIDIA optimizations
+
+</td>
+</tr>
 </table>
 
 ## Requirements
@@ -155,6 +180,15 @@ nitrogen cast --record ~/Videos/stream.mp4 --audio desktop
 
 # Stream with microphone
 nitrogen cast --audio mic
+
+# Enable Smooth Motion (30fps → 60fps)
+nitrogen cast --frame-gen 2x
+
+# Maximum smoothness (30fps → 120fps)
+nitrogen cast --frame-gen 4x --preset 1080p30
+
+# Adaptive frame generation
+nitrogen cast --frame-gen adaptive
 ```
 
 ### Commands
@@ -245,6 +279,7 @@ preset = "1080p60"
 codec = "h264"
 bitrate = 6000
 low_latency = true
+frame_gen = "off"  # off, 2x, 3x, 4x, adaptive
 
 [camera]
 name = "Nitrogen Camera"
@@ -262,6 +297,12 @@ bitrate = 192       # kbps
 toggle = "ctrl+shift+f9"
 pause = "ctrl+shift+f10"
 record = "ctrl+shift+f11"
+
+[frame_gen]
+mode = "off"        # off, 2x, 3x, 4x, adaptive
+gpu_accelerated = true
+quality = 75        # 0-100, higher = better but more latency
+max_latency_ms = 50
 ```
 
 ## Troubleshooting
@@ -290,13 +331,15 @@ record = "ctrl+shift+f11"
 - Reduce resolution or framerate
 </details>
 
-## Part of the Ghost Ecosystem
+## Part of the NVPrime Ecosystem
 
-Nitrogen integrates with other Ghost projects:
+Nitrogen integrates with the NVPrime platform and Ghost projects:
 
+- **NVPrime** - Unified NVIDIA Linux platform
+- **VENOM** - NVIDIA-native gaming runtime
+- **nvcontrol** - NVIDIA settings & control panel for Linux
 - **GhostStream** - Rust streaming library
 - **GhostWave** - RTX Voice for Linux
-- **nvcontrol** - NVIDIA settings & control panel for Linux
 
 ---
 
