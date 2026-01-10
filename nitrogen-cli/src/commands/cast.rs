@@ -409,6 +409,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
         av1: av1_config,
         audio_codec,
         audio_bitrate,
+        frame_gen: nitrogen_core::encode::FrameGenMode::Off, // TODO: Add CLI arg
     };
 
     // Validate configuration

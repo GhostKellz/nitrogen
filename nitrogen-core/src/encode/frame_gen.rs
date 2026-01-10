@@ -7,11 +7,14 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
+use serde::{Deserialize, Serialize};
+
 use crate::error::Result;
 use crate::types::Frame;
 
 /// Frame generation mode
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum FrameGenMode {
     /// No frame generation (passthrough)
     #[default]

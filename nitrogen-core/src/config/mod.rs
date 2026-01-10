@@ -8,6 +8,7 @@ mod file;
 pub use av1::{Av1Config, Av1Tier, Av1Tune, ChromaFormat, MultipassMode};
 pub use file::{sample_config, ConfigFile};
 
+use crate::encode::FrameGenMode;
 use crate::types::CaptureSource;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -351,6 +352,9 @@ pub struct CaptureConfig {
     pub audio_codec: AudioCodec,
     /// Audio bitrate in kbps (0 = auto)
     pub audio_bitrate: u32,
+    /// Smooth Motion frame generation mode
+    #[serde(default)]
+    pub frame_gen: FrameGenMode,
 }
 
 fn default_camera_name() -> String {
@@ -379,6 +383,7 @@ impl CaptureConfig {
             av1: Av1Config::default(),
             audio_codec: AudioCodec::default(),
             audio_bitrate: 0,
+            frame_gen: FrameGenMode::default(),
         }
     }
 
@@ -399,6 +404,7 @@ impl CaptureConfig {
             av1: Av1Config::default(),
             audio_codec: AudioCodec::default(),
             audio_bitrate: 0,
+            frame_gen: FrameGenMode::default(),
         }
     }
 
