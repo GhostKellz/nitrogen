@@ -110,10 +110,13 @@ impl VirtualMicrophone {
     /// Stop the virtual microphone
     pub fn stop(&mut self) {
         if let Some(tx) = self.shutdown_tx.take() {
+            // It's OK if the receiver is gone - the thread may have already exited
             let _ = tx.send(());
         }
         if let Some(thread) = self.pw_thread.take() {
-            let _ = thread.join();
+            if let Err(e) = thread.join() {
+                tracing::warn!("Virtual microphone thread panicked: {:?}", e);
+            }
         }
     }
 }
@@ -202,7 +205,10 @@ fn run_virtual_mic_loop(
                         let copy_samples = samples.len().min(max_samples);
                         let copy_bytes = copy_samples * std::mem::size_of::<f32>();
 
-                        // Safety: we're writing to the PipeWire buffer
+                        // SAFETY: PipeWire provides us with a valid, writable buffer via data.data().
+                        // The slice pointer is valid for the duration of this process callback.
+                        // We verify copy_samples <= max_samples before copying, ensuring we don't
+                        // write beyond the buffer bounds. The f32 alignment is guaranteed by PipeWire.
                         unsafe {
                             let dst = slice.as_ptr() as *mut f32;
                             std::ptr::copy_nonoverlapping(samples.as_ptr(), dst, copy_samples);
@@ -234,6 +240,8 @@ fn run_virtual_mic_loop(
                     if let Some(slice) = data.data() {
                         let buffer_size = slice.len();
 
+                        // SAFETY: Same as above - PipeWire buffer is valid and writable.
+                        // We only write zeros within the buffer bounds (buffer_size).
                         unsafe {
                             let dst = slice.as_ptr() as *mut u8;
                             std::ptr::write_bytes(dst, 0, buffer_size);

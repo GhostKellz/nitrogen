@@ -4,15 +4,17 @@ use anyhow::{Context, Result};
 use clap::Args;
 use nitrogen_core::{
     config::{
-        AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig, ChromaFormat, Codec,
-        ConfigFile, EncoderPreset, MultipassMode, Preset,
+        discord, AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig,
+        ChromaFormat, Codec, ConfigFile, EncoderPreset, MultipassMode, Preset,
     },
     daemon_running,
     gpu::detect_rtx50_features,
     ipc::IpcServer,
+    overlay::OverlayPosition,
     pipeline::Pipeline,
     socket_path,
     types::CaptureSource,
+    TonemapAlgorithm, TonemapMode,
 };
 use std::sync::Arc;
 use tokio::signal;
@@ -89,6 +91,37 @@ pub struct CastArgs {
     #[arg(long, default_value = "0")]
     audio_bitrate: u32,
 
+    /// Frame generation mode for Smooth Motion (off, 2x, 3x, 4x, adaptive)
+    /// Interpolates frames to increase output framerate
+    /// WARNING: Experimental feature, may cause visual artifacts
+    #[arg(long, default_value = "off")]
+    frame_gen: String,
+
+    // ========== HDR tonemapping options ==========
+    /// HDR tonemapping mode (auto, on, off)
+    /// auto: Tonemap if HDR content detected
+    /// on: Always apply tonemapping
+    /// off: Pass through without tonemapping
+    #[arg(long, default_value = "auto")]
+    hdr_tonemap: String,
+
+    /// HDR tonemapping algorithm (reinhard, aces, hable)
+    /// reinhard: Simple, preserves colors
+    /// aces: Filmic, cinematic look
+    /// hable: Uncharted 2 filmic curve
+    #[arg(long, default_value = "reinhard")]
+    hdr_algorithm: String,
+
+    /// HDR peak luminance in nits (used when metadata unavailable)
+    #[arg(long, default_value = "1000")]
+    hdr_peak_luminance: u32,
+
+    // ========== Output options ==========
+    /// Disable virtual camera output (useful for file recording only)
+    /// At least one output (camera or recording) must be enabled
+    #[arg(long)]
+    no_camera: bool,
+
     // ========== AV1-specific options ==========
     /// AV1: Enable 10-bit color (main10 profile)
     #[arg(long)]
@@ -135,6 +168,49 @@ pub struct CastArgs {
     /// Auto-detect GPU and enable RTX 50 UHQ features when available
     #[arg(long)]
     av1_auto: bool,
+
+    // ========== Performance overlay options ==========
+    /// Enable latency overlay (shows capture/encode latency, FPS, drops)
+    #[arg(long)]
+    overlay: bool,
+
+    /// Overlay position (top-left, top-right, bottom-left, bottom-right)
+    #[arg(long, default_value = "top-left")]
+    overlay_position: String,
+
+    // ========== Streaming options ==========
+    /// Stream to RTMP/SRT URL (e.g., rtmp://live.twitch.tv/app/stream_key)
+    /// Supports rtmp://, rtmps://, and srt:// protocols
+    #[arg(long, value_name = "URL")]
+    stream: Option<String>,
+
+    /// Enable WebRTC output for browser-based viewing
+    /// Starts a local HTTP signaling server for WebRTC connections
+    #[arg(long)]
+    webrtc: bool,
+
+    /// WebRTC local signaling server port
+    #[arg(long, default_value = "9000")]
+    webrtc_port: u16,
+
+    // ========== Preset shortcuts ==========
+    /// Discord-optimized preset (1080p60, H.264, 6Mbps, low-latency)
+    /// Overrides preset, codec, and bitrate settings for optimal Discord compatibility
+    #[arg(long)]
+    discord: bool,
+
+    // ========== Audio mixing options ==========
+    /// Desktop audio volume (0.0 - 2.0, default 1.0)
+    #[arg(long, default_value = "1.0")]
+    desktop_volume: f32,
+
+    /// Microphone volume (0.0 - 2.0, default 1.0)
+    #[arg(long, default_value = "1.0")]
+    mic_volume: f32,
+
+    /// Enable audio ducking (reduce desktop volume when mic is active)
+    #[arg(long)]
+    audio_ducking: bool,
 }
 
 /// Start a capture session
@@ -195,6 +271,29 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     } else {
         args.gpu
     };
+
+    // Discord preset overrides - apply before other parsing if --discord is specified
+    let (preset_str, codec_str, bitrate) = if args.discord {
+        info!("Using Discord-optimized preset");
+        println!("Using Discord-optimized preset (1080p60, H.264, {} kbps)", discord::DEFAULT_BITRATE);
+
+        // Warn about incompatible options
+        if args.resolution.is_some() || args.fps.is_some() {
+            warn!("--discord overrides custom resolution/fps settings");
+        }
+        if args.codec != "h264" && args.codec != "H.264" {
+            warn!("--discord overrides codec to H.264 for compatibility");
+        }
+        if args.bitrate != 0 {
+            warn!("--discord overrides custom bitrate to {} kbps", discord::DEFAULT_BITRATE);
+        }
+
+        ("1080p60".to_string(), "h264".to_string(), discord::DEFAULT_BITRATE)
+    } else {
+        (preset_str.to_string(), codec_str.to_string(), bitrate)
+    };
+    let preset_str = &preset_str;
+    let codec_str = &codec_str;
 
     // Parse preset - check for custom resolution/fps first
     let preset = if args.resolution.is_some() || args.fps.is_some() {
@@ -287,6 +386,52 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     } else {
         args.audio_bitrate
     };
+
+    // Parse frame generation mode for Smooth Motion
+    let frame_gen = nitrogen_core::encode::FrameGenMode::from_str(&args.frame_gen);
+    if frame_gen != nitrogen_core::encode::FrameGenMode::Off {
+        if !nitrogen_core::encode::supports_smooth_motion() {
+            warn!("Smooth Motion requested but GPU may not support optical flow optimally");
+        }
+        info!("Smooth Motion enabled: {} interpolation", frame_gen);
+    }
+
+    // Parse HDR tonemapping settings
+    let hdr_tonemap_str = if args.hdr_tonemap == "auto" {
+        &file_config.hdr.tonemap
+    } else {
+        &args.hdr_tonemap
+    };
+    let hdr_tonemap: TonemapMode = hdr_tonemap_str.parse().map_err(|e: String| {
+        anyhow::anyhow!(
+            "Invalid HDR tonemap mode '{}'. Valid options: auto, on, off. {}",
+            hdr_tonemap_str,
+            e
+        )
+    })?;
+
+    let hdr_algorithm_str = if args.hdr_algorithm == "reinhard" {
+        &file_config.hdr.algorithm
+    } else {
+        &args.hdr_algorithm
+    };
+    let hdr_algorithm: TonemapAlgorithm = hdr_algorithm_str.parse().map_err(|e: String| {
+        anyhow::anyhow!(
+            "Invalid HDR algorithm '{}'. Valid options: reinhard, aces, hable. {}",
+            hdr_algorithm_str,
+            e
+        )
+    })?;
+
+    let hdr_peak_luminance = if args.hdr_peak_luminance == 1000 {
+        file_config.hdr.peak_luminance
+    } else {
+        args.hdr_peak_luminance
+    };
+
+    if hdr_tonemap != TonemapMode::Off {
+        info!("HDR tonemapping: {} with {} algorithm", hdr_tonemap_str, hdr_algorithm_str);
+    }
 
     // Determine capture source
     let source = if let Some(ref monitor) = args.monitor {
@@ -409,7 +554,23 @@ pub async fn cast(args: CastArgs) -> Result<()> {
         av1: av1_config,
         audio_codec,
         audio_bitrate,
-        frame_gen: nitrogen_core::encode::FrameGenMode::Off, // TODO: Add CLI arg
+        frame_gen,
+        hdr_tonemap,
+        hdr_algorithm,
+        hdr_peak_luminance,
+        camera_enabled: !args.no_camera,
+        overlay_enabled: args.overlay || file_config.overlay.enabled,
+        overlay_position: OverlayPosition::from_str(&if args.overlay_position == "top-left" {
+            file_config.overlay.position.clone()
+        } else {
+            args.overlay_position.clone()
+        }),
+        stream_url: args.stream.clone(),
+        webrtc_enabled: args.webrtc,
+        webrtc_port: args.webrtc_port,
+        desktop_volume: args.desktop_volume,
+        mic_volume: args.mic_volume,
+        audio_ducking: args.audio_ducking,
     };
 
     // Validate configuration
@@ -433,7 +594,11 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     println!("  Framerate:   {} fps", config.fps());
     println!("  Codec:       {}", config.codec);
     println!("  Bitrate:     {} kbps", config.effective_bitrate());
-    println!("  Camera:      {}", config.camera_name);
+    if config.camera_enabled {
+        println!("  Camera:      {}", config.camera_name);
+    } else {
+        println!("  Camera:      disabled");
+    }
     println!("  Low Latency: {}", config.low_latency);
     println!("  GPU:         {}", config.gpu);
     if config.audio_source != AudioSource::None {
@@ -450,7 +615,43 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     if let Some(ref path) = config.record_path {
         println!("  Recording:   {:?}", path);
     }
+    if config.frame_gen != nitrogen_core::encode::FrameGenMode::Off {
+        println!(
+            "  Frame Gen:   {} (Smooth Motion - EXPERIMENTAL)",
+            config.frame_gen
+        );
+    }
+    if config.hdr_tonemap != TonemapMode::Off {
+        println!(
+            "  HDR Tonemap: {} ({})",
+            config.hdr_tonemap, config.hdr_algorithm
+        );
+    }
+    if config.overlay_enabled {
+        println!("  Overlay:     enabled ({:?})", config.overlay_position);
+    }
+    if let Some(ref url) = config.stream_url {
+        // Mask stream key for display
+        let safe_url = if let Some(idx) = url.rfind('/') {
+            let (base, key) = url.split_at(idx + 1);
+            if !key.is_empty() && !key.contains(':') {
+                format!("{}****", base)
+            } else {
+                url.clone()
+            }
+        } else {
+            url.clone()
+        };
+        println!("  Stream:      {}", safe_url);
+    }
+    if config.webrtc_enabled {
+        println!("  WebRTC:      http://localhost:{}", config.webrtc_port);
+    }
     println!();
+
+    // Save values we need after pipeline creation (since config is moved)
+    let camera_enabled = config.camera_enabled;
+    let record_path_display = config.record_path.clone();
 
     // Create pipeline
     let pipeline = Pipeline::new(config)
@@ -488,8 +689,14 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     println!("  Resolution: {}x{}", session.width, session.height);
     println!("  Node ID:    {}", session.node_id);
     println!();
-    println!("Virtual camera '{}' is now available.", camera_name);
-    println!("Select it in Discord or other applications to start streaming.");
+
+    if camera_enabled {
+        println!("Virtual camera '{}' is now available.", camera_name);
+        println!("Select it in Discord or other applications to start streaming.");
+    }
+    if let Some(ref path) = record_path_display {
+        println!("Recording to: {:?}", path);
+    }
     println!();
 
     if !args.no_daemon {
@@ -499,7 +706,9 @@ pub async fn cast(args: CastArgs) -> Result<()> {
 
     // Wait for Ctrl+C or IPC shutdown
     let ctrl_c = async {
-        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+        if let Err(e) = signal::ctrl_c().await {
+            error!("Failed to listen for Ctrl+C: {}", e);
+        }
     };
 
     // Main processing loop

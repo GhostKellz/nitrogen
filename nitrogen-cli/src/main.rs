@@ -72,11 +72,15 @@ async fn main() {
         _ => Level::TRACE,
     };
 
+    let filter = EnvFilter::from_default_env()
+        .add_directive(
+            format!("nitrogen={}", level)
+                .parse()
+                .unwrap_or_else(|_| format!("nitrogen=warn").parse().expect("default directive")),
+        );
+
     tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::from_default_env()
-                .add_directive(format!("nitrogen={}", level).parse().unwrap()),
-        )
+        .with_env_filter(filter)
         .with_target(false)
         .init();
 

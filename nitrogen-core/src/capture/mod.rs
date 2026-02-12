@@ -5,12 +5,18 @@
 //! - Screencast session setup
 //! - PipeWire stream connection for video frames
 //! - PipeWire audio capture (desktop and microphone)
+//! - Audio mixing (combining multiple sources)
+//! - (Future) Direct DRM capture for lower latency
 
 pub mod audio;
+pub mod drm;
+pub mod mixer;
 pub mod portal;
 pub mod stream;
 
 pub use audio::AudioCaptureStream;
+pub use drm::DrmCapture;
+pub use mixer::{AudioMixer, MixerConfig, VolumeControl};
 pub use portal::PortalCapture;
 pub use stream::CaptureStream;
 

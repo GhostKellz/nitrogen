@@ -82,6 +82,10 @@ impl FileRecorder {
             })?;
 
             let codec_par = stream.parameters();
+            // SAFETY: FFmpeg's rust-ffmpeg doesn't expose setters for all codec parameters.
+            // We obtain a raw pointer to AVCodecParameters from a valid stream we just created.
+            // The pointer is valid for the lifetime of the stream, and we only write standard
+            // FFmpeg parameter values. This is a common pattern when rust-ffmpeg lacks safe APIs.
             unsafe {
                 let ptr = codec_par.as_ptr() as *mut ffmpeg::ffi::AVCodecParameters;
                 (*ptr).codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_VIDEO;
@@ -154,6 +158,8 @@ impl FileRecorder {
             })?;
 
             let codec_par = stream.parameters();
+            // SAFETY: Same rationale as video parameters above - rust-ffmpeg lacks safe setters.
+            // The stream and its parameters are valid, and we write standard FFmpeg values.
             unsafe {
                 let ptr = codec_par.as_ptr() as *mut ffmpeg::ffi::AVCodecParameters;
                 (*ptr).codec_type = ffmpeg::ffi::AVMediaType::AVMEDIA_TYPE_AUDIO;

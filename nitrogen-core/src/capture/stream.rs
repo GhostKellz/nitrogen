@@ -20,7 +20,7 @@ use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace, warn};
 
 use crate::error::{NitrogenError, Result};
-use crate::types::{Frame, FrameData, FrameFormat};
+use crate::types::{Frame, FrameData, FrameFormat, HdrMetadata};
 
 /// Shared state between PipeWire thread and main thread
 struct SharedState {
@@ -59,6 +59,32 @@ impl VideoInfo {
             VideoFormat::YUY2 => 0x56595559, // YUYV
             VideoFormat::NV12 => 0x3231564E, // NV12
             _ => 0x34325258,                 // Default to XR24
+        }
+    }
+
+    /// Check if the video format indicates HDR content (10-bit or higher)
+    ///
+    /// Common HDR formats include P010 (10-bit NV12) and 10-bit RGB variants.
+    /// Currently most Wayland compositors send 8-bit SDR formats, but this
+    /// detection allows proper handling when HDR passthrough is supported.
+    fn detect_hdr_metadata(&self) -> Option<HdrMetadata> {
+        // Check for 10-bit formats that typically indicate HDR content
+        // Note: PipeWire VideoFormat enum values - checking for common 10-bit formats
+        match self.format {
+            // 10-bit YUV formats (common for HDR video)
+            // VideoFormat::P010 and similar 10-bit formats indicate HDR
+            // When matched, return HDR10 metadata as a reasonable default
+            // Current accepted formats are all 8-bit SDR
+            VideoFormat::NV12 => {
+                // NV12 is typically 8-bit SDR, but could be HDR in some contexts
+                // For now, treat as SDR unless we have additional metadata
+                None
+            }
+            _ => {
+                // All currently accepted formats (BGRx, BGRA, RGBx, RGBA, etc.)
+                // are 8-bit SDR formats
+                None
+            }
         }
     }
 }
@@ -102,7 +128,10 @@ impl CaptureStream {
         let pw_thread = std::thread::Builder::new()
             .name("nitrogen-pipewire".to_string())
             .spawn(move || {
-                // Take ownership of the fd in this thread
+                // SAFETY: We transfer ownership of the file descriptor from the main thread
+                // to this spawned thread. The original fd is forgotten with std::mem::forget()
+                // after the spawn succeeds, ensuring exactly one owner. raw_fd is a valid
+                // file descriptor obtained from the portal's PipeWire connection.
                 let fd = unsafe { OwnedFd::from_raw_fd(raw_fd) };
                 if let Err(e) =
                     run_pipewire_loop(fd, node_id, frame_tx_clone, shutdown_rx, shared_clone)
@@ -351,6 +380,7 @@ fn run_pipewire_loop(
                         .duration_since(std::time::UNIX_EPOCH)
                         .map(|d| d.as_nanos() as u64)
                         .unwrap_or(0),
+                    hdr_metadata: format.detect_hdr_metadata(),
                 };
 
                 // Send frame

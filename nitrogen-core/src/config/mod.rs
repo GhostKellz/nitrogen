@@ -6,12 +6,34 @@ mod av1;
 mod file;
 
 pub use av1::{Av1Config, Av1Tier, Av1Tune, ChromaFormat, MultipassMode};
-pub use file::{sample_config, ConfigFile};
+pub use file::{
+    sample_config, ConfigFile, DetectionSettings, HdrSettings, HotkeySettings,
+    OverlaySettings, PerformanceSettings, WebRTCSettings,
+};
 
-use crate::encode::FrameGenMode;
+use crate::encode::{FrameGenMode, TonemapAlgorithm, TonemapMode};
+use crate::overlay::OverlayPosition;
 use crate::types::CaptureSource;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+/// Discord streaming constraints and recommended settings
+pub mod discord {
+    /// Maximum resolution width for Discord Go Live
+    pub const MAX_WIDTH: u32 = 1920;
+    /// Maximum resolution height for Discord Go Live
+    pub const MAX_HEIGHT: u32 = 1080;
+    /// Maximum framerate supported by Discord
+    pub const MAX_FPS: u32 = 60;
+    /// Minimum recommended bitrate (kbps)
+    pub const MIN_BITRATE: u32 = 2500;
+    /// Maximum recommended bitrate (kbps) for Nitro users
+    pub const MAX_BITRATE: u32 = 8000;
+    /// Default recommended bitrate (kbps)
+    pub const DEFAULT_BITRATE: u32 = 6000;
+    /// Preferred codec for Discord compatibility
+    pub const PREFERRED_CODEC: &str = "h264";
+}
 
 /// Video codec for encoding
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
@@ -202,13 +224,13 @@ pub enum Preset {
     P1440_120,
     /// 3840x2160 @ 30fps
     #[serde(rename = "4k30")]
-    P4K_30,
+    P4k30,
     /// 3840x2160 @ 60fps
     #[serde(rename = "4k60")]
-    P4K_60,
+    P4k60,
     /// 3840x2160 @ 120fps
     #[serde(rename = "4k120")]
-    P4K_120,
+    P4k120,
     /// Custom resolution/framerate
     Custom {
         width: u32,
@@ -224,7 +246,7 @@ impl Preset {
             Self::P720_30 | Self::P720_60 => 1280,
             Self::P1080_30 | Self::P1080_60 => 1920,
             Self::P1440_30 | Self::P1440_60 | Self::P1440_120 => 2560,
-            Self::P4K_30 | Self::P4K_60 | Self::P4K_120 => 3840,
+            Self::P4k30 | Self::P4k60 | Self::P4k120 => 3840,
             Self::Custom { width, .. } => *width,
         }
     }
@@ -235,7 +257,7 @@ impl Preset {
             Self::P720_30 | Self::P720_60 => 720,
             Self::P1080_30 | Self::P1080_60 => 1080,
             Self::P1440_30 | Self::P1440_60 | Self::P1440_120 => 1440,
-            Self::P4K_30 | Self::P4K_60 | Self::P4K_120 => 2160,
+            Self::P4k30 | Self::P4k60 | Self::P4k120 => 2160,
             Self::Custom { height, .. } => *height,
         }
     }
@@ -243,9 +265,9 @@ impl Preset {
     /// Get framerate
     pub fn fps(&self) -> u32 {
         match self {
-            Self::P720_30 | Self::P1080_30 | Self::P1440_30 | Self::P4K_30 => 30,
-            Self::P720_60 | Self::P1080_60 | Self::P1440_60 | Self::P4K_60 => 60,
-            Self::P1440_120 | Self::P4K_120 => 120,
+            Self::P720_30 | Self::P1080_30 | Self::P1440_30 | Self::P4k30 => 30,
+            Self::P720_60 | Self::P1080_60 | Self::P1440_60 | Self::P4k60 => 60,
+            Self::P1440_120 | Self::P4k120 => 120,
             Self::Custom { fps, .. } => *fps,
         }
     }
@@ -260,9 +282,9 @@ impl Preset {
             Self::P1440_30 => 9000,
             Self::P1440_60 => 12000,
             Self::P1440_120 => 18000,
-            Self::P4K_30 => 20000,
-            Self::P4K_60 => 35000,
-            Self::P4K_120 => 50000,
+            Self::P4k30 => 20000,
+            Self::P4k60 => 35000,
+            Self::P4k120 => 50000,
             Self::Custom { width, height, fps } => {
                 // Estimate based on pixels per second
                 let pixels_per_second = (*width as u64) * (*height as u64) * (*fps as u64);
@@ -293,10 +315,10 @@ impl std::fmt::Display for Preset {
             Self::P1440_30 => write!(f, "1440p30"),
             Self::P1440_60 => write!(f, "1440p60"),
             Self::P1440_120 => write!(f, "1440p120"),
-            Self::P4K_30 => write!(f, "4K30"),
-            Self::P4K_60 => write!(f, "4K60"),
-            Self::P4K_120 => write!(f, "4K120"),
-            Self::Custom { width, height, fps } => write!(f, "{}x{}@{}", width, height, fps),
+            Self::P4k30 => write!(f, "4K30"),
+            Self::P4k60 => write!(f, "4K60"),
+            Self::P4k120 => write!(f, "4K120"),
+            Self::Custom { width, height, fps } => write!(f, "{}x{}@{}fps", width, height, fps),
         }
     }
 }
@@ -313,9 +335,9 @@ impl std::str::FromStr for Preset {
             "1440p30" | "2k30" => Ok(Self::P1440_30),
             "1440p60" | "2k60" => Ok(Self::P1440_60),
             "1440p120" | "2k120" => Ok(Self::P1440_120),
-            "4k30" | "2160p30" => Ok(Self::P4K_30),
-            "4k60" | "2160p60" => Ok(Self::P4K_60),
-            "4k120" | "2160p120" => Ok(Self::P4K_120),
+            "4k30" | "2160p30" => Ok(Self::P4k30),
+            "4k60" | "2160p60" => Ok(Self::P4k60),
+            "4k120" | "2160p120" => Ok(Self::P4k120),
             _ => Err(format!("Unknown preset: {}", s)),
         }
     }
@@ -355,14 +377,62 @@ pub struct CaptureConfig {
     /// Smooth Motion frame generation mode
     #[serde(default)]
     pub frame_gen: FrameGenMode,
+    /// HDR tonemapping mode (auto, on, off)
+    #[serde(default)]
+    pub hdr_tonemap: TonemapMode,
+    /// HDR tonemapping algorithm (reinhard, aces, hable)
+    #[serde(default)]
+    pub hdr_algorithm: TonemapAlgorithm,
+    /// HDR peak luminance override (nits), used when metadata unavailable
+    #[serde(default = "default_hdr_peak_luminance")]
+    pub hdr_peak_luminance: u32,
+    /// Enable virtual camera output
+    #[serde(default = "default_camera_enabled")]
+    pub camera_enabled: bool,
+    /// Enable latency overlay
+    #[serde(default)]
+    pub overlay_enabled: bool,
+    /// Overlay position
+    #[serde(default)]
+    pub overlay_position: OverlayPosition,
+    /// RTMP/SRT stream URL (optional)
+    #[serde(default)]
+    pub stream_url: Option<String>,
+    /// Enable WebRTC output for browser-based viewing
+    #[serde(default)]
+    pub webrtc_enabled: bool,
+    /// WebRTC local signaling server port
+    #[serde(default = "default_webrtc_port")]
+    pub webrtc_port: u16,
+    /// Desktop audio volume (0.0 - 2.0, 1.0 = normal)
+    #[serde(default = "default_volume")]
+    pub desktop_volume: f32,
+    /// Microphone volume (0.0 - 2.0, 1.0 = normal)
+    #[serde(default = "default_volume")]
+    pub mic_volume: f32,
+    /// Enable audio ducking (reduce desktop when mic active)
+    #[serde(default)]
+    pub audio_ducking: bool,
+}
+
+fn default_volume() -> f32 {
+    1.0
+}
+
+fn default_camera_enabled() -> bool {
+    true
 }
 
 fn default_camera_name() -> String {
     "Nitrogen Camera".to_string()
 }
 
-fn default_true() -> bool {
-    true
+fn default_hdr_peak_luminance() -> u32 {
+    1000
+}
+
+fn default_webrtc_port() -> u16 {
+    9000
 }
 
 impl CaptureConfig {
@@ -384,6 +454,18 @@ impl CaptureConfig {
             audio_codec: AudioCodec::default(),
             audio_bitrate: 0,
             frame_gen: FrameGenMode::default(),
+            hdr_tonemap: TonemapMode::default(),
+            hdr_algorithm: TonemapAlgorithm::default(),
+            hdr_peak_luminance: default_hdr_peak_luminance(),
+            camera_enabled: default_camera_enabled(),
+            overlay_enabled: false,
+            overlay_position: OverlayPosition::default(),
+            stream_url: None,
+            webrtc_enabled: false,
+            webrtc_port: default_webrtc_port(),
+            desktop_volume: default_volume(),
+            mic_volume: default_volume(),
+            audio_ducking: false,
         }
     }
 
@@ -405,6 +487,18 @@ impl CaptureConfig {
             audio_codec: AudioCodec::default(),
             audio_bitrate: 0,
             frame_gen: FrameGenMode::default(),
+            hdr_tonemap: TonemapMode::default(),
+            hdr_algorithm: TonemapAlgorithm::default(),
+            hdr_peak_luminance: default_hdr_peak_luminance(),
+            camera_enabled: default_camera_enabled(),
+            overlay_enabled: false,
+            overlay_position: OverlayPosition::default(),
+            stream_url: None,
+            webrtc_enabled: false,
+            webrtc_port: default_webrtc_port(),
+            desktop_volume: default_volume(),
+            mic_volume: default_volume(),
+            audio_ducking: false,
         }
     }
 

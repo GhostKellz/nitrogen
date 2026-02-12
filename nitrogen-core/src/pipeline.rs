@@ -17,12 +17,17 @@ use tracing::{debug, error, info, trace, warn};
 use crate::capture::portal::{CaptureType, PortalCapture, SessionInfo};
 use crate::capture::{AudioCaptureStream, CaptureStream};
 use crate::config::{AudioSource, CaptureConfig};
-use crate::encode::{AudioEncoder, NvencEncoder};
+use crate::encode::{AudioEncoder, NvencEncoder, TonemapConfig, Tonemapper};
 use crate::error::{NitrogenError, Result};
 use crate::output::{
-    create_camera, record_av_from_channels, FileRecorder, RawOutputSink, VirtualCamera,
-    VirtualMicrophone,
+    create_camera, record_av_from_channels, start_signaling_server, stream_av_from_channels,
+    FileRecorder, RawOutputSink, StreamConfig, StreamOutput, StreamProtocol, VirtualCamera,
+    VirtualMicrophone, WebRTCConfig, WebRTCOutput,
 };
+use tokio::sync::RwLock;
+use crate::overlay::{LatencyOverlay, OverlayConfig};
+use crate::performance::{create_metrics, PerformanceMetrics};
+use crate::formats::fourcc_to_gs_format;
 use crate::types::{AudioFrame, Frame, FrameData, Handle};
 
 // Re-export ghoststream types for frame conversion and scaling
@@ -74,10 +79,24 @@ pub struct Pipeline {
     virtual_mic: Option<VirtualMicrophone>,
     /// File recorder task handle
     recorder_handle: Option<JoinHandle<Result<u64>>>,
+    /// RTMP/SRT stream output task handle
+    streamer_handle: Option<JoinHandle<Result<u64>>>,
+    /// WebRTC output
+    webrtc_output: Option<Arc<RwLock<WebRTCOutput>>>,
+    /// WebRTC signaling server task handle
+    webrtc_server_handle: Option<JoinHandle<Result<()>>>,
     /// Recording file path
     record_path: Option<PathBuf>,
     /// Audio samples processed
     audio_samples_processed: AtomicU64,
+    /// Performance metrics collector
+    metrics: Arc<PerformanceMetrics>,
+    /// HDR tonemapper
+    tonemapper: Tonemapper,
+    /// Latency overlay renderer
+    overlay: LatencyOverlay,
+    /// Last frame time for FPS tracking
+    last_frame_time: Option<Instant>,
 }
 
 /// Pipeline state
@@ -102,6 +121,13 @@ pub enum PipelineState {
 impl Pipeline {
     /// Create a new pipeline with the given configuration
     pub async fn new(config: CaptureConfig) -> Result<Self> {
+        // Validate that at least one output is enabled
+        if !config.camera_enabled && config.record_path.is_none() && config.stream_url.is_none() {
+            return Err(NitrogenError::config(
+                "At least one output must be enabled (virtual camera, file recording, or streaming)".to_string(),
+            ));
+        }
+
         let portal = PortalCapture::new().await?;
         let output_resolution = (config.width(), config.height());
         let record_path = config.record_path.clone();
@@ -150,8 +176,35 @@ impl Pipeline {
         };
 
         let has_audio = config.audio_source != AudioSource::None;
+
+        // Create performance metrics
+        let metrics = create_metrics();
+
+        // Create tonemapper
+        let tonemap_config = TonemapConfig {
+            mode: config.hdr_tonemap,
+            algorithm: config.hdr_algorithm,
+            peak_luminance: config.hdr_peak_luminance,
+            sdr_white_point: 100,
+        };
+        let tonemapper = Tonemapper::new(tonemap_config);
+
+        // Create overlay
+        let overlay_config = OverlayConfig {
+            enabled: config.overlay_enabled,
+            position: config.overlay_position,
+            show_capture: true,
+            show_encode: true,
+            show_fps: true,
+            show_bitrate: true,
+            show_drops: true,
+            font_scale: 1.0,
+            background_opacity: 0.7,
+        };
+        let overlay = LatencyOverlay::new(overlay_config);
+
         info!(
-            "Pipeline configured for {}x{} @ {}fps output{}{}",
+            "Pipeline configured for {}x{} @ {}fps output{}{}{}",
             output_resolution.0,
             output_resolution.1,
             config.fps(),
@@ -160,7 +213,12 @@ impl Pipeline {
             } else {
                 ""
             },
-            if has_audio { " with audio" } else { "" }
+            if has_audio { " with audio" } else { "" },
+            if config.overlay_enabled {
+                " with overlay"
+            } else {
+                ""
+            }
         );
 
         Ok(Self {
@@ -183,8 +241,15 @@ impl Pipeline {
             audio_frame_rx: None,
             virtual_mic: None,
             recorder_handle: None,
+            streamer_handle: None,
+            webrtc_output: None,
+            webrtc_server_handle: None,
             record_path,
             audio_samples_processed: AtomicU64::new(0),
+            metrics,
+            tonemapper,
+            overlay,
+            last_frame_time: None,
         })
     }
 
@@ -256,18 +321,23 @@ impl Pipeline {
         self.frame_rx = Some(frame_rx);
         self.capture = Some(capture);
 
-        // Create virtual camera using ghoststream at OUTPUT resolution
-        let mut camera = create_camera(Some(&self.config.camera_name));
+        // Create virtual camera using ghoststream at OUTPUT resolution (if enabled)
+        if self.config.camera_enabled {
+            let mut camera = create_camera(Some(&self.config.camera_name));
 
-        camera
-            .init_raw(
-                Resolution::new(self.output_resolution.0, self.output_resolution.1),
-                GsFrameFormat::Bgra,
-            )
-            .await
-            .map_err(|e| NitrogenError::pipewire(format!("Camera init failed: {}", e)))?;
+            camera
+                .init_raw(
+                    Resolution::new(self.output_resolution.0, self.output_resolution.1),
+                    GsFrameFormat::Bgra,
+                )
+                .await
+                .map_err(|e| NitrogenError::pipewire(format!("Camera init failed: {}", e)))?;
 
-        self.camera = Some(camera);
+            self.camera = Some(camera);
+            info!("Virtual camera output enabled: {}", self.config.camera_name);
+        } else {
+            info!("Virtual camera output disabled");
+        }
         self.state = PipelineState::WaitingForStream;
         self.start_time = Some(Instant::now());
 
@@ -308,7 +378,7 @@ impl Pipeline {
         }
 
         // Start file recorder if path specified and encoder is available
-        if let (Some(ref encoder), Some(ref path)) = (&self.encoder, &self.record_path) {
+        if let (Some(encoder), Some(path)) = (&self.encoder, &self.record_path) {
             match FileRecorder::new(
                 path,
                 self.config.codec,
@@ -350,6 +420,122 @@ impl Pipeline {
                 }
                 Err(e) => {
                     warn!("Failed to create file recorder: {}. Recording disabled.", e);
+                }
+            }
+        }
+
+        // Start RTMP/SRT streaming if URL provided
+        if let Some(ref stream_url) = self.config.stream_url {
+            // Validate and detect protocol
+            if let Some(protocol) = StreamProtocol::from_url(stream_url) {
+                // Streaming requires an encoder - create one if we don't have one for recording
+                let encoder_for_stream = if self.encoder.is_some() {
+                    // Reuse existing encoder's broadcast channel
+                    self.encoder.as_ref()
+                } else {
+                    // Need to create an encoder just for streaming
+                    info!("Creating NVENC encoder for streaming");
+                    match NvencEncoder::new(&self.config) {
+                        Ok(enc) => {
+                            self.encoder = Some(enc);
+                            self.encoder.as_ref()
+                        }
+                        Err(e) => {
+                            warn!("Failed to create encoder for streaming: {}. Streaming disabled.", e);
+                            None
+                        }
+                    }
+                };
+
+                if let Some(encoder) = encoder_for_stream {
+                    let stream_config = StreamConfig {
+                        url: stream_url.clone(),
+                        codec: self.config.codec,
+                        width: self.config.width(),
+                        height: self.config.height(),
+                        fps: self.config.fps(),
+                        bitrate: self.config.effective_bitrate(),
+                        audio_codec: if self.config.audio_source != AudioSource::None {
+                            Some(self.config.audio_codec)
+                        } else {
+                            None
+                        },
+                        audio_sample_rate: 48000,
+                        audio_channels: 2,
+                        audio_bitrate: self.config.effective_audio_bitrate(),
+                    };
+
+                    match StreamOutput::new(stream_config) {
+                        Ok(streamer) => {
+                            let video_rx = encoder.subscribe();
+                            let audio_rx = self.audio_encoder.as_ref().map(|e| e.subscribe());
+
+                            let handle = tokio::spawn(async move {
+                                stream_av_from_channels(streamer, video_rx, audio_rx).await
+                            });
+                            self.streamer_handle = Some(handle);
+
+                            // Mask stream key for logging
+                            let safe_url = StreamOutput::safe_url(stream_url);
+                            info!("{} stream started to {}", protocol, safe_url);
+                        }
+                        Err(e) => {
+                            warn!("Failed to create stream output: {}. Streaming disabled.", e);
+                        }
+                    }
+                }
+            } else {
+                warn!(
+                    "Invalid stream URL: {}. Must be rtmp://, rtmps://, or srt://",
+                    stream_url
+                );
+            }
+        }
+
+        // Start WebRTC output if enabled
+        if self.config.webrtc_enabled {
+            // WebRTC requires an encoder - create one if we don't have one
+            if self.encoder.is_none() {
+                info!("Creating NVENC encoder for WebRTC");
+                match NvencEncoder::new(&self.config) {
+                    Ok(enc) => {
+                        self.encoder = Some(enc);
+                    }
+                    Err(e) => {
+                        warn!("Failed to create encoder for WebRTC: {}. WebRTC disabled.", e);
+                    }
+                }
+            }
+
+            if self.encoder.is_some() {
+                let webrtc_config = WebRTCConfig {
+                    ice_servers: vec!["stun:stun.l.google.com:19302".to_string()],
+                    video_codec: "h264".to_string(),
+                    video_payload_type: 96,
+                    audio_enabled: self.config.audio_source != AudioSource::None,
+                };
+
+                match WebRTCOutput::new(webrtc_config).await {
+                    Ok(mut output) => {
+                        if let Err(e) = output.init().await {
+                            warn!("Failed to initialize WebRTC: {}", e);
+                        } else {
+                            let output = Arc::new(RwLock::new(output));
+                            self.webrtc_output = Some(output.clone());
+
+                            // Start the signaling server
+                            let port = self.config.webrtc_port;
+                            let server_handle = tokio::spawn(async move {
+                                start_signaling_server(output, port).await
+                            });
+                            self.webrtc_server_handle = Some(server_handle);
+
+                            info!("WebRTC output enabled - view at http://localhost:{}", port);
+                        }
+                    }
+                    Err(e) => {
+                        warn!("Failed to create WebRTC output: {}", e);
+                    }
                 }
             }
         }
@@ -457,16 +643,29 @@ impl Pipeline {
 
     /// Process a single frame
     async fn process_frame(&mut self, frame: &Frame) -> Result<()> {
+        let frame_start = Instant::now();
+
+        // Record frame time for FPS calculation
+        if let Some(last_time) = self.last_frame_time {
+            self.metrics.record_frame_time(frame_start.duration_since(last_time));
+        }
+        self.last_frame_time = Some(frame_start);
+
         // Encode video frame for file recording if encoder is active
+        let encode_start = Instant::now();
         if let Some(ref mut encoder) = self.encoder {
             if let Err(e) = encoder.encode(frame) {
                 // Log but don't fail - camera output can still work
                 trace!("Video encoding failed: {}", e);
+            } else {
+                self.metrics.record_encode_timing(encode_start, Instant::now());
             }
         }
 
         // Process any available audio frames
         self.process_audio_frames();
+
+        let capture_start = Instant::now();
 
         let gs_frame = match &frame.data {
             FrameData::Memory(data) => {
@@ -476,9 +675,23 @@ impl Pipeline {
                 let (dst_width, dst_height) = self.output_resolution;
 
                 // Process frame: convert to BGRA if needed, then scale if needed
-                let processed_data = process_frame_data(
+                let mut processed_data = process_frame_data(
                     data, src_width, src_height, src_format, dst_width, dst_height,
                 )?;
+
+                // Apply HDR tonemapping if needed
+                self.tonemapper.tonemap(
+                    &mut processed_data,
+                    dst_width,
+                    dst_height,
+                    frame.hdr_metadata.as_ref(),
+                );
+
+                // Apply latency overlay if enabled
+                if self.overlay.is_enabled() {
+                    let stats = self.metrics.get_stats();
+                    self.overlay.render(&mut processed_data, dst_width, dst_height, &stats);
+                }
 
                 Some(GsFrame {
                     data: processed_data,
@@ -506,17 +719,33 @@ impl Pipeline {
                         match process_frame_data(
                             &data, src_width, src_height, src_format, dst_width, dst_height,
                         ) {
-                            Ok(processed_data) => Some(GsFrame {
-                                data: processed_data,
-                                width: dst_width,
-                                height: dst_height,
-                                stride: dst_width * 4, // BGRA
-                                format: GsFrameFormat::Bgra,
-                                pts: frame.pts as i64,
-                                duration: 0,
-                                is_keyframe: true,
-                                dmabuf_fd: None,
-                            }),
+                            Ok(mut processed_data) => {
+                                // Apply HDR tonemapping if needed
+                                self.tonemapper.tonemap(
+                                    &mut processed_data,
+                                    dst_width,
+                                    dst_height,
+                                    frame.hdr_metadata.as_ref(),
+                                );
+
+                                // Apply latency overlay if enabled
+                                if self.overlay.is_enabled() {
+                                    let stats = self.metrics.get_stats();
+                                    self.overlay.render(&mut processed_data, dst_width, dst_height, &stats);
+                                }
+
+                                Some(GsFrame {
+                                    data: processed_data,
+                                    width: dst_width,
+                                    height: dst_height,
+                                    stride: dst_width * 4, // BGRA
+                                    format: GsFrameFormat::Bgra,
+                                    pts: frame.pts as i64,
+                                    duration: 0,
+                                    is_keyframe: true,
+                                    dmabuf_fd: None,
+                                })
+                            }
                             Err(e) => {
                                 debug!("Failed to process DMA-BUF frame: {}", e);
                                 None
@@ -533,8 +762,11 @@ impl Pipeline {
             }
         };
 
+        self.metrics.record_capture_timing(capture_start, Instant::now());
+
         // Send to camera
-        if let (Some(ref mut camera), Some(gs_frame)) = (&mut self.camera, gs_frame) {
+        let output_start = Instant::now();
+        if let (Some(camera), Some(gs_frame)) = (&mut self.camera, gs_frame) {
             if let Err(e) = camera.write_frame(&gs_frame).await {
                 let failed = self.frames_failed.fetch_add(1, Ordering::Relaxed) + 1;
                 error!(
@@ -542,6 +774,7 @@ impl Pipeline {
                     e, failed
                 );
             } else {
+                self.metrics.record_output_timing(output_start, Instant::now());
                 let count = self.frames_processed.fetch_add(1, Ordering::Relaxed) + 1;
                 if count % 300 == 0 {
                     // Log stats every ~5 seconds at 60fps
@@ -552,9 +785,11 @@ impl Pipeline {
                     let fps = count as f64 / elapsed;
                     let dropped = self.frames_dropped.load(Ordering::Relaxed);
                     let failed = self.frames_failed.load(Ordering::Relaxed);
+                    let stats = self.metrics.get_stats();
                     debug!(
-                        "Pipeline {}: {} frames ({:.1} fps), {} dropped, {} failed",
-                        self.handle, count, fps, dropped, failed
+                        "Pipeline {}: {} frames ({:.1} fps), {} dropped, {} failed | Latency: cap={:.1}ms enc={:.1}ms out={:.1}ms",
+                        self.handle, count, fps, dropped, failed,
+                        stats.capture_latency_ms, stats.encode_latency_ms, stats.output_latency_ms
                     );
                 }
             }
@@ -616,6 +851,30 @@ impl Pipeline {
                 Ok(Ok(packets)) => info!("Recording complete: {} packets written", packets),
                 Ok(Err(e)) => warn!("Recording finished with error: {}", e),
                 Err(e) => warn!("Recorder task panicked: {}", e),
+            }
+        }
+
+        // Wait for streaming to finish
+        if let Some(handle) = self.streamer_handle.take() {
+            info!("Waiting for streaming to complete...");
+            match handle.await {
+                Ok(Ok(packets)) => info!("Streaming complete: {} packets sent", packets),
+                Ok(Err(e)) => warn!("Streaming finished with error: {}", e),
+                Err(e) => warn!("Streamer task panicked: {}", e),
+            }
+        }
+
+        // Stop WebRTC signaling server
+        if let Some(handle) = self.webrtc_server_handle.take() {
+            info!("Stopping WebRTC signaling server...");
+            handle.abort(); // Signaling server runs forever, so abort it
+        }
+
+        // Stop WebRTC output
+        if let Some(webrtc) = self.webrtc_output.take() {
+            let mut output = webrtc.write().await;
+            if let Err(e) = output.stop().await {
+                warn!("Failed to stop WebRTC output: {}", e);
             }
         }
 
@@ -747,6 +1006,22 @@ impl Pipeline {
         self.frames_failed.load(Ordering::Relaxed)
     }
 
+    /// Get performance metrics
+    pub fn metrics(&self) -> Arc<PerformanceMetrics> {
+        self.metrics.clone()
+    }
+
+    /// Toggle the latency overlay on/off
+    pub fn toggle_overlay(&mut self) {
+        self.overlay.toggle();
+        info!("Latency overlay: {}", if self.overlay.is_enabled() { "enabled" } else { "disabled" });
+    }
+
+    /// Check if overlay is enabled
+    pub fn overlay_enabled(&self) -> bool {
+        self.overlay.is_enabled()
+    }
+
     /// Get pipeline statistics
     pub fn stats(&self) -> PipelineStats {
         let elapsed = self
@@ -850,24 +1125,6 @@ impl std::fmt::Display for PipelineStats {
     }
 }
 
-/// Convert DRM fourcc to ghoststream FrameFormat
-fn fourcc_to_gs_format(fourcc: u32) -> GsFrameFormat {
-    match fourcc {
-        // XRGB/BGRX formats - most common from Wayland
-        0x34325258 | 0x34324258 => GsFrameFormat::Bgra, // XR24, XB24
-        // ARGB/BGRA formats
-        0x34325241 | 0x34324142 => GsFrameFormat::Bgra, // AR24, AB24
-        // RGBA formats
-        0x34324241 | 0x34324152 => GsFrameFormat::Rgba, // BA24, RA24
-        // YUV formats
-        0x3231564E => GsFrameFormat::Nv12, // NV12
-        _ => {
-            debug!("Unknown fourcc 0x{:08x}, treating as BGRA", fourcc);
-            GsFrameFormat::Bgra
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -876,11 +1133,5 @@ mod tests {
     fn test_pipeline_state() {
         assert_eq!(PipelineState::Idle, PipelineState::Idle);
         assert_ne!(PipelineState::Idle, PipelineState::Running);
-    }
-
-    #[test]
-    fn test_fourcc_conversion() {
-        assert_eq!(fourcc_to_gs_format(0x34325258), GsFrameFormat::Bgra);
-        assert_eq!(fourcc_to_gs_format(0x3231564E), GsFrameFormat::Nv12);
     }
 }

@@ -30,6 +30,30 @@ pub struct ConfigFile {
     /// Audio settings
     #[serde(default)]
     pub audio: AudioSettings,
+
+    /// Environment detection settings
+    #[serde(default)]
+    pub detection: DetectionSettings,
+
+    /// HDR tonemapping settings
+    #[serde(default)]
+    pub hdr: HdrSettings,
+
+    /// Performance monitoring settings
+    #[serde(default)]
+    pub performance: PerformanceSettings,
+
+    /// Latency overlay settings
+    #[serde(default)]
+    pub overlay: OverlaySettings,
+
+    /// Hotkey bindings
+    #[serde(default)]
+    pub hotkeys: HotkeySettings,
+
+    /// WebRTC streaming settings
+    #[serde(default)]
+    pub webrtc: WebRTCSettings,
 }
 
 /// Default capture settings
@@ -86,6 +110,264 @@ pub struct AudioSettings {
     /// Audio bitrate in kbps (0 = auto based on codec)
     #[serde(default)]
     pub bitrate: u32,
+}
+
+/// Environment detection settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectionSettings {
+    /// Automatically detect and optimize for Gamescope
+    #[serde(default = "default_true")]
+    pub auto_gamescope: bool,
+
+    /// Automatically detect Steam Deck and apply optimizations
+    #[serde(default = "default_true")]
+    pub auto_steam_deck: bool,
+
+    /// Enable compositor-specific optimizations
+    #[serde(default = "default_true")]
+    pub compositor_optimizations: bool,
+}
+
+impl Default for DetectionSettings {
+    fn default() -> Self {
+        Self {
+            auto_gamescope: true,
+            auto_steam_deck: true,
+            compositor_optimizations: true,
+        }
+    }
+}
+
+/// HDR tonemapping settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HdrSettings {
+    /// Tonemapping mode: auto, on, off
+    #[serde(default = "default_hdr_tonemap")]
+    pub tonemap: String,
+
+    /// Tonemapping algorithm: reinhard, aces, hable
+    #[serde(default = "default_hdr_algorithm")]
+    pub algorithm: String,
+
+    /// Peak luminance in nits (for metadata fallback)
+    #[serde(default = "default_peak_luminance")]
+    pub peak_luminance: u32,
+
+    /// Preserve HDR for file recording (only tonemap virtual camera)
+    #[serde(default)]
+    pub preserve_hdr_recording: bool,
+}
+
+impl Default for HdrSettings {
+    fn default() -> Self {
+        Self {
+            tonemap: default_hdr_tonemap(),
+            algorithm: default_hdr_algorithm(),
+            peak_luminance: default_peak_luminance(),
+            preserve_hdr_recording: false,
+        }
+    }
+}
+
+fn default_hdr_tonemap() -> String {
+    "auto".to_string()
+}
+
+fn default_hdr_algorithm() -> String {
+    "reinhard".to_string()
+}
+
+fn default_peak_luminance() -> u32 {
+    1000
+}
+
+/// Performance monitoring settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PerformanceSettings {
+    /// Log frame times to console/file
+    #[serde(default)]
+    pub log_frame_times: bool,
+
+    /// Enable GPU temperature/power monitoring
+    #[serde(default = "default_true")]
+    pub gpu_monitoring: bool,
+
+    /// Frame time sample interval in milliseconds
+    #[serde(default = "default_sample_interval")]
+    pub sample_interval_ms: u32,
+
+    /// Number of samples to keep for rolling averages (default: 120)
+    #[serde(default = "default_metrics_samples")]
+    pub metrics_sample_count: usize,
+}
+
+impl Default for PerformanceSettings {
+    fn default() -> Self {
+        Self {
+            log_frame_times: false,
+            gpu_monitoring: true,
+            sample_interval_ms: default_sample_interval(),
+            metrics_sample_count: default_metrics_samples(),
+        }
+    }
+}
+
+fn default_metrics_samples() -> usize {
+    120
+}
+
+fn default_sample_interval() -> u32 {
+    100
+}
+
+/// Latency overlay settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OverlaySettings {
+    /// Enable latency overlay
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Overlay position: top-left, top-right, bottom-left, bottom-right
+    #[serde(default = "default_overlay_position")]
+    pub position: String,
+
+    /// Show capture latency
+    #[serde(default = "default_true")]
+    pub show_capture_latency: bool,
+
+    /// Show encode latency
+    #[serde(default = "default_true")]
+    pub show_encode_latency: bool,
+
+    /// Show current FPS
+    #[serde(default = "default_true")]
+    pub show_fps: bool,
+
+    /// Show current bitrate
+    #[serde(default = "default_true")]
+    pub show_bitrate: bool,
+
+    /// Show dropped frame count
+    #[serde(default = "default_true")]
+    pub show_drops: bool,
+
+    /// Overlay font scale (1.0 = normal)
+    #[serde(default = "default_font_scale")]
+    pub font_scale: f32,
+}
+
+impl Default for OverlaySettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            position: default_overlay_position(),
+            show_capture_latency: true,
+            show_encode_latency: true,
+            show_fps: true,
+            show_bitrate: true,
+            show_drops: true,
+            font_scale: default_font_scale(),
+        }
+    }
+}
+
+fn default_overlay_position() -> String {
+    "top-left".to_string()
+}
+
+fn default_font_scale() -> f32 {
+    1.0
+}
+
+/// Hotkey bindings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HotkeySettings {
+    /// Toggle capture on/off
+    #[serde(default = "default_hotkey_toggle")]
+    pub toggle: String,
+
+    /// Pause/resume capture
+    #[serde(default = "default_hotkey_pause")]
+    pub pause: String,
+
+    /// Toggle recording
+    #[serde(default = "default_hotkey_record")]
+    pub record: String,
+
+    /// Toggle latency overlay
+    #[serde(default = "default_hotkey_overlay")]
+    pub overlay_toggle: String,
+}
+
+impl Default for HotkeySettings {
+    fn default() -> Self {
+        Self {
+            toggle: default_hotkey_toggle(),
+            pause: default_hotkey_pause(),
+            record: default_hotkey_record(),
+            overlay_toggle: default_hotkey_overlay(),
+        }
+    }
+}
+
+fn default_hotkey_toggle() -> String {
+    "ctrl+shift+f9".to_string()
+}
+
+fn default_hotkey_pause() -> String {
+    "ctrl+shift+f10".to_string()
+}
+
+fn default_hotkey_record() -> String {
+    "ctrl+shift+f11".to_string()
+}
+
+fn default_hotkey_overlay() -> String {
+    "ctrl+shift+f12".to_string()
+}
+
+/// WebRTC streaming settings
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebRTCSettings {
+    /// Enable WebRTC output
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Signaling server URL (optional, for remote connections)
+    #[serde(default)]
+    pub signaling_url: String,
+
+    /// ICE/STUN servers for NAT traversal
+    #[serde(default = "default_ice_servers")]
+    pub ice_servers: Vec<String>,
+
+    /// Preferred video codec for WebRTC: h264, vp8, vp9, av1
+    #[serde(default = "default_webrtc_codec")]
+    pub video_codec: String,
+
+    /// WebRTC listen port (0 = random)
+    #[serde(default)]
+    pub port: u16,
+}
+
+impl Default for WebRTCSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            signaling_url: String::new(),
+            ice_servers: default_ice_servers(),
+            video_codec: default_webrtc_codec(),
+            port: 0,
+        }
+    }
+}
+
+fn default_ice_servers() -> Vec<String> {
+    vec!["stun:stun.l.google.com:19302".to_string()]
+}
+
+fn default_webrtc_codec() -> String {
+    "h264".to_string()
 }
 
 /// AV1 codec-specific settings (RTX 40/50 series)
@@ -395,6 +677,88 @@ codec = "aac"
 
 # Audio bitrate in kbps (0 = automatic based on codec)
 bitrate = 0
+
+[detection]
+# Automatically detect and optimize for Gamescope
+auto_gamescope = true
+
+# Automatically detect Steam Deck and apply optimizations
+auto_steam_deck = true
+
+# Enable compositor-specific optimizations (KDE, Hyprland, etc.)
+compositor_optimizations = true
+
+[hdr]
+# HDR tonemapping mode: auto (detect), on (always), off (never)
+tonemap = "auto"
+
+# Tonemapping algorithm: reinhard, aces, hable
+algorithm = "reinhard"
+
+# Peak luminance in nits (fallback when metadata unavailable)
+peak_luminance = 1000
+
+# Preserve HDR for file recording (only tonemap virtual camera output)
+preserve_hdr_recording = false
+
+[performance]
+# Log frame times to console for debugging
+log_frame_times = false
+
+# Enable GPU temperature/power monitoring
+gpu_monitoring = true
+
+# Metrics sample interval in milliseconds
+sample_interval_ms = 100
+
+# Number of samples for rolling average calculations (higher = smoother stats)
+metrics_sample_count = 120
+
+[overlay]
+# Enable on-screen latency overlay
+enabled = false
+
+# Overlay position: top-left, top-right, bottom-left, bottom-right
+position = "top-left"
+
+# Stats to display
+show_capture_latency = true
+show_encode_latency = true
+show_fps = true
+show_bitrate = true
+show_drops = true
+
+# Font scale (1.0 = normal)
+font_scale = 1.0
+
+[hotkeys]
+# Toggle capture on/off
+toggle = "ctrl+shift+f9"
+
+# Pause/resume capture
+pause = "ctrl+shift+f10"
+
+# Toggle recording
+record = "ctrl+shift+f11"
+
+# Toggle latency overlay
+overlay_toggle = "ctrl+shift+f12"
+
+[webrtc]
+# Enable WebRTC output for browser-based viewing
+enabled = false
+
+# Signaling server URL (leave empty for local-only)
+signaling_url = ""
+
+# ICE/STUN servers for NAT traversal
+ice_servers = ["stun:stun.l.google.com:19302"]
+
+# Video codec for WebRTC: h264, vp8, vp9, av1
+video_codec = "h264"
+
+# Listen port (0 = random available port)
+port = 0
 "#
     .to_string()
 }

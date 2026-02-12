@@ -21,6 +21,8 @@ pub fn socket_path() -> PathBuf {
         PathBuf::from(runtime_dir).join("nitrogen.sock")
     } else {
         // Fallback to /tmp with user-specific name
+        // SAFETY: libc::getuid() is a simple syscall that returns the real user ID.
+        // It has no preconditions and cannot fail (always returns a valid uid_t).
         let uid = unsafe { libc::getuid() };
         PathBuf::from(format!("/tmp/nitrogen-{}.sock", uid))
     }
