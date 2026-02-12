@@ -178,8 +178,8 @@ pub fn get_gpu_generation(gpu_index: u32) -> Result<GpuGeneration> {
 
 /// Check if AV1 encoding is supported
 pub fn supports_av1(gpu_index: u32) -> Result<bool> {
-    let gen = get_gpu_generation(gpu_index)?;
-    Ok(gen.supports_av1())
+    let generation = get_gpu_generation(gpu_index)?;
+    Ok(generation.supports_av1())
 }
 
 /// Get recommended AV1 settings for the detected GPU

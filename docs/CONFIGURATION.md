@@ -70,6 +70,9 @@ pause = "ctrl+shift+f10"
 # Toggle file recording
 record = "ctrl+shift+f11"
 
+# Toggle latency overlay
+overlay_toggle = "ctrl+shift+f12"
+
 [recording]
 # Default output directory for recordings
 output_dir = "~/Videos"
@@ -77,6 +80,76 @@ output_dir = "~/Videos"
 # Default container format
 # Options: mp4, mkv
 format = "mp4"
+
+[detection]
+# Automatically detect and optimize for Gamescope
+auto_gamescope = true
+
+# Automatically detect Steam Deck and apply optimizations
+auto_steam_deck = true
+
+# Enable compositor-specific optimizations (KDE, Hyprland, etc.)
+compositor_optimizations = true
+
+[hdr]
+# HDR tonemapping mode
+# Options: auto (detect), on (always), off (never)
+tonemap = "auto"
+
+# Tonemapping algorithm
+# Options: reinhard, aces, hable
+algorithm = "reinhard"
+
+# Peak luminance in nits (fallback when metadata unavailable)
+peak_luminance = 1000
+
+# Preserve HDR for file recording (only tonemap virtual camera)
+preserve_hdr_recording = false
+
+[performance]
+# Log frame times to console for debugging
+log_frame_times = false
+
+# Enable GPU temperature/power monitoring
+gpu_monitoring = true
+
+# Metrics sample interval in milliseconds
+sample_interval_ms = 100
+
+[overlay]
+# Enable on-screen latency overlay
+enabled = false
+
+# Overlay position
+# Options: top-left, top-right, bottom-left, bottom-right
+position = "top-left"
+
+# Stats to display
+show_capture_latency = true
+show_encode_latency = true
+show_fps = true
+show_bitrate = true
+show_drops = true
+
+# Font scale (1.0 = normal)
+font_scale = 1.0
+
+[webrtc]
+# Enable WebRTC output for browser-based viewing (experimental)
+enabled = false
+
+# Signaling server URL (leave empty for local-only)
+signaling_url = ""
+
+# ICE/STUN servers for NAT traversal
+ice_servers = ["stun:stun.l.google.com:19302"]
+
+# Video codec for WebRTC
+# Options: h264, vp8, vp9, av1
+video_codec = "h264"
+
+# Listen port (0 = random available port)
+port = 0
 ```
 
 ## Preset Reference
@@ -239,4 +312,66 @@ quality = "medium"
 source = "desktop"
 codec = "opus"
 bitrate = 160
+```
+
+### HDR Game Streaming
+```toml
+[defaults]
+preset = "1440p60"
+codec = "hevc"
+bitrate = 12000
+low_latency = true
+
+[hdr]
+tonemap = "auto"
+algorithm = "aces"  # Cinematic look
+peak_luminance = 1000
+
+[overlay]
+enabled = true
+position = "top-left"
+show_fps = true
+show_drops = true
+```
+
+### Steam Deck / Gamescope
+```toml
+[defaults]
+preset = "720p60"
+codec = "h264"
+bitrate = 4000
+low_latency = true
+
+[encoder]
+quality = "fast"
+
+[detection]
+auto_gamescope = true
+auto_steam_deck = true
+
+[audio]
+source = "desktop"
+```
+
+### Performance Debugging
+```toml
+[defaults]
+preset = "1080p60"
+codec = "h264"
+low_latency = true
+
+[performance]
+log_frame_times = true
+gpu_monitoring = true
+sample_interval_ms = 50
+
+[overlay]
+enabled = true
+position = "bottom-right"
+show_capture_latency = true
+show_encode_latency = true
+show_fps = true
+show_bitrate = true
+show_drops = true
+font_scale = 1.5
 ```

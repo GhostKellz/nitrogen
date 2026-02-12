@@ -6,6 +6,136 @@
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+/// HDR transfer function (EOTF)
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum TransferFunction {
+    /// Standard Dynamic Range (BT.1886 gamma)
+    #[default]
+    Sdr,
+    /// Perceptual Quantizer (SMPTE ST 2084) - HDR10
+    Pq,
+    /// Hybrid Log-Gamma (ARIB STD-B67) - HLG
+    Hlg,
+}
+
+impl TransferFunction {
+    /// Check if this is an HDR transfer function
+    pub fn is_hdr(&self) -> bool {
+        matches!(self, TransferFunction::Pq | TransferFunction::Hlg)
+    }
+}
+
+impl std::fmt::Display for TransferFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TransferFunction::Sdr => write!(f, "SDR"),
+            TransferFunction::Pq => write!(f, "PQ (HDR10)"),
+            TransferFunction::Hlg => write!(f, "HLG"),
+        }
+    }
+}
+
+/// Color primaries
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ColorPrimaries {
+    /// BT.709 (sRGB, standard HD)
+    #[default]
+    Bt709,
+    /// BT.2020 (wide color gamut for HDR)
+    Bt2020,
+    /// DCI-P3 (digital cinema)
+    DciP3,
+}
+
+impl ColorPrimaries {
+    /// Check if this is a wide color gamut
+    pub fn is_wide_gamut(&self) -> bool {
+        matches!(self, ColorPrimaries::Bt2020 | ColorPrimaries::DciP3)
+    }
+}
+
+impl std::fmt::Display for ColorPrimaries {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColorPrimaries::Bt709 => write!(f, "BT.709"),
+            ColorPrimaries::Bt2020 => write!(f, "BT.2020"),
+            ColorPrimaries::DciP3 => write!(f, "DCI-P3"),
+        }
+    }
+}
+
+/// HDR metadata for a video frame
+#[derive(Debug, Clone, Copy, Default)]
+pub struct HdrMetadata {
+    /// Transfer function (EOTF)
+    pub transfer: TransferFunction,
+    /// Color primaries
+    pub primaries: ColorPrimaries,
+    /// Maximum Content Light Level (nits), if known
+    pub max_cll: Option<u16>,
+    /// Maximum Frame Average Light Level (nits), if known
+    pub max_fall: Option<u16>,
+    /// Mastering display max luminance (nits), if known
+    pub mastering_max_luminance: Option<u32>,
+    /// Mastering display min luminance (0.0001 nits units), if known
+    pub mastering_min_luminance: Option<u32>,
+}
+
+impl HdrMetadata {
+    /// Create SDR metadata (no HDR)
+    pub fn sdr() -> Self {
+        Self::default()
+    }
+
+    /// Create HDR10 metadata with PQ transfer function
+    pub fn hdr10() -> Self {
+        Self {
+            transfer: TransferFunction::Pq,
+            primaries: ColorPrimaries::Bt2020,
+            ..Default::default()
+        }
+    }
+
+    /// Create HLG metadata
+    pub fn hlg() -> Self {
+        Self {
+            transfer: TransferFunction::Hlg,
+            primaries: ColorPrimaries::Bt2020,
+            ..Default::default()
+        }
+    }
+
+    /// Set content light level metadata
+    pub fn with_content_light_level(mut self, max_cll: u16, max_fall: u16) -> Self {
+        self.max_cll = Some(max_cll);
+        self.max_fall = Some(max_fall);
+        self
+    }
+
+    /// Set mastering display luminance
+    pub fn with_mastering_luminance(mut self, max_nits: u32, min_nits: u32) -> Self {
+        self.mastering_max_luminance = Some(max_nits);
+        self.mastering_min_luminance = Some(min_nits);
+        self
+    }
+
+    /// Check if this is HDR content
+    pub fn is_hdr(&self) -> bool {
+        self.transfer.is_hdr()
+    }
+
+    /// Get the peak luminance to use for tonemapping
+    /// Returns max_cll if available, otherwise mastering max, otherwise a default
+    pub fn peak_luminance(&self) -> u32 {
+        self.max_cll
+            .map(|v| v as u32)
+            .or(self.mastering_max_luminance)
+            .unwrap_or(1000) // Default HDR10 assumption
+    }
+}
+
 /// Global handle counter for unique session IDs
 static HANDLE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -195,6 +325,8 @@ pub struct Frame {
     pub data: FrameData,
     /// Presentation timestamp in nanoseconds
     pub pts: u64,
+    /// HDR metadata (if available)
+    pub hdr_metadata: Option<HdrMetadata>,
 }
 
 /// Frame data storage

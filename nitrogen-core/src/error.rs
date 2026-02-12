@@ -44,6 +44,10 @@ pub enum NitrogenError {
     #[error("Unsupported: {0}")]
     Unsupported(String),
 
+    /// WebRTC error
+    #[error("WebRTC error: {0}")]
+    WebRTC(String),
+
     /// I/O error
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
@@ -81,6 +85,11 @@ impl NitrogenError {
     /// Create a config error
     pub fn config(msg: impl Into<String>) -> Self {
         Self::Config(msg.into())
+    }
+
+    /// Create a WebRTC error
+    pub fn webrtc(msg: impl Into<String>) -> Self {
+        Self::WebRTC(msg.into())
     }
 
     /// Add context to an error
@@ -126,6 +135,10 @@ impl NitrogenError {
                  Use 'nitrogen stop' to stop it first, or 'nitrogen status' to check its state."
             ),
             Self::Unsupported(_) => None,
+            Self::WebRTC(_) => Some(
+                "Check your network configuration and ensure ICE servers are accessible.\n\
+                 WebRTC requires proper network connectivity for peer-to-peer streaming."
+            ),
             Self::Io(_) => None,
             Self::WithContext { source, .. } => source.user_hint(),
         }

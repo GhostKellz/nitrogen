@@ -50,6 +50,16 @@ evdev = { workspace = true }
 ghoststream = { workspace = true }
 ghostwave-core = { workspace = true }
 
+# Dynamic library loading for NVIDIA FRUC
+libloading = "0.8"
+
+# WebRTC
+webrtc = { workspace = true }
+bytes = { workspace = true }
+
+# HTTP server for WebRTC signaling
+axum = { workspace = true }
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3"

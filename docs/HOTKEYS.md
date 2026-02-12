@@ -9,6 +9,7 @@ Nitrogen supports system-wide keyboard shortcuts that work across all applicatio
 | `Ctrl+Shift+F9` | Toggle capture on/off |
 | `Ctrl+Shift+F10` | Pause/resume capture |
 | `Ctrl+Shift+F11` | Toggle file recording |
+| `Ctrl+Shift+F12` | Toggle latency overlay |
 
 ## Requirements
 
@@ -55,6 +56,9 @@ pause = "ctrl+shift+f10"
 
 # Toggle file recording
 record = "ctrl+shift+f11"
+
+# Toggle latency overlay
+overlay_toggle = "ctrl+shift+f12"
 ```
 
 ## Hotkey Format
@@ -115,6 +119,7 @@ Format: `modifier+modifier+key`
 toggle = "ctrl+alt+f9"
 pause = "ctrl+alt+f10"
 record = "ctrl+alt+f11"
+overlay_toggle = "ctrl+alt+f12"
 ```
 
 ### Simple Keys (No Modifiers)

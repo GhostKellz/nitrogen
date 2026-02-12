@@ -4,6 +4,7 @@ use anyhow::Result;
 use nitrogen_core::capture;
 use nitrogen_core::config::Codec;
 use nitrogen_core::encode;
+use nitrogen_core::env::{detect_environment, RuntimeEnvironment};
 
 /// Show system information and NVENC capabilities
 pub async fn info() -> Result<()> {
@@ -99,31 +100,58 @@ pub async fn info() -> Result<()> {
 
     // Show environment info
     println!("Environment:");
-    println!(
-        "  XDG_SESSION_TYPE: {}",
-        std::env::var("XDG_SESSION_TYPE").unwrap_or_else(|_| "not set".to_string())
-    );
-    println!(
-        "  WAYLAND_DISPLAY:  {}",
-        std::env::var("WAYLAND_DISPLAY").unwrap_or_else(|_| "not set".to_string())
-    );
-    println!(
-        "  XDG_CURRENT_DESKTOP: {}",
-        std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_else(|_| "not set".to_string())
-    );
+    let env = detect_environment();
+    println!("  Detected:    {}", env.description());
 
-    // Check if running on Wayland
-    let is_wayland = std::env::var("XDG_SESSION_TYPE")
-        .map(|v| v == "wayland")
-        .unwrap_or(false)
-        || std::env::var("WAYLAND_DISPLAY").is_ok();
+    match &env {
+        RuntimeEnvironment::Gamescope(info) => {
+            println!("  Steam Deck:  {}", if info.steam_deck { "yes" } else { "no" });
+            println!("  Nested:      {}", if info.nested { "yes" } else { "no" });
+            if let Some(display) = &info.display {
+                println!("  Display:     {}", display);
+            }
+        }
+        RuntimeEnvironment::NativeWayland(info) => {
+            println!("  Compositor:  {}", info.compositor);
+            if let Some(display) = &info.display {
+                println!("  Display:     {}", display);
+            }
+        }
+        RuntimeEnvironment::X11 => {
+            println!("  Display:     {}", std::env::var("DISPLAY").unwrap_or_else(|_| "unknown".to_string()));
+        }
+        RuntimeEnvironment::Unknown => {}
+    }
+
+    // Show optimizations that will be applied
+    let opts = env.optimizations();
+    if opts.reduce_latency || opts.fsr_compatible_res || opts.auto_preset {
+        println!();
+        println!("  Optimizations:");
+        if opts.reduce_latency {
+            println!("    - Low-latency encoding enabled");
+        }
+        if opts.fsr_compatible_res {
+            println!("    - FSR-compatible resolutions preferred");
+        }
+        if let Some(preset) = &opts.encoder_preset_hint {
+            println!("    - Suggested encoder preset: {}", preset);
+        }
+    }
 
     println!();
-    if is_wayland {
-        println!("Running on Wayland - good!");
-    } else {
-        println!("Warning: Not running on Wayland.");
-        println!("Nitrogen is designed for Wayland. X11 support is limited.");
+    match &env {
+        RuntimeEnvironment::NativeWayland(_) | RuntimeEnvironment::Gamescope(_) => {
+            println!("Running on Wayland - good!");
+        }
+        RuntimeEnvironment::X11 => {
+            println!("Warning: Running on X11.");
+            println!("Nitrogen is designed for Wayland. X11 support is limited.");
+        }
+        RuntimeEnvironment::Unknown => {
+            println!("Warning: Could not detect display server.");
+            println!("Nitrogen requires Wayland for best experience.");
+        }
     }
 
     println!();

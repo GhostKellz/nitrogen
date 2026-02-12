@@ -75,11 +75,12 @@
 </td>
 <td>
 
-**🔊 Audio Capture**
+**🔊 Audio Capture & Mixing**
 - Desktop audio capture via PipeWire
 - Microphone input support
+- Volume control per source
+- Audio ducking (auto-duck desktop)
 - AAC and Opus encoding
-- Muxed into recordings
 
 </td>
 </tr>
@@ -120,6 +121,46 @@
 - DLSS 4.5 aware
 - Power/thermal monitoring
 - Automatic NVIDIA optimizations
+
+</td>
+</tr>
+<tr>
+<td>
+
+**🌈 HDR Tonemapping**
+- HDR10/PQ to SDR conversion
+- Multiple algorithms (Reinhard, ACES, Hable)
+- Auto-detection of HDR content
+- Stream HDR games to Discord
+
+</td>
+<td>
+
+**📊 Performance Overlay**
+- Real-time latency display
+- Capture/encode/output metrics
+- FPS and dropped frame counter
+- Toggle with hotkey
+
+</td>
+</tr>
+<tr>
+<td>
+
+**📡 RTMP/SRT Streaming**
+- Stream to Twitch, YouTube, etc.
+- RTMP and RTMPS support
+- Low-latency SRT protocol
+- Custom server support
+
+</td>
+<td>
+
+**🔧 Gamescope Integration**
+- Auto-detect Gamescope/Steam Deck
+- Optimized low-latency presets
+- FSR-compatible resolutions
+- Compositor-aware capture
 
 </td>
 </tr>
@@ -189,6 +230,15 @@ nitrogen cast --frame-gen 4x --preset 1080p30
 
 # Adaptive frame generation
 nitrogen cast --frame-gen adaptive
+
+# Enable HDR tonemapping for HDR games
+nitrogen cast --hdr-tonemap auto
+
+# Enable latency overlay
+nitrogen cast --overlay
+
+# Full featured streaming
+nitrogen cast --preset 1080p60 --audio desktop --overlay --record ~/Videos/stream.mp4
 ```
 
 ### Commands
@@ -232,6 +282,7 @@ Default hotkeys (requires `input` group membership):
 | `Ctrl+Shift+F9` | Toggle capture on/off |
 | `Ctrl+Shift+F10` | Pause/resume capture |
 | `Ctrl+Shift+F11` | Toggle recording |
+| `Ctrl+Shift+F12` | Toggle latency overlay |
 
 ## How It Works
 

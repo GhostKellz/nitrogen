@@ -37,6 +37,7 @@ pub fn create_test_frame(width: u32, height: u32, color: [u8; 4]) -> Frame {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
             .unwrap_or(0),
+        hdr_metadata: None,
     }
 }
 
@@ -68,6 +69,7 @@ pub fn create_gradient_frame(width: u32, height: u32) -> Frame {
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_nanos() as u64)
             .unwrap_or(0),
+        hdr_metadata: None,
     }
 }
 
@@ -97,6 +99,7 @@ impl MockFrameSource {
     }
 
     /// Get the number of active receivers
+    #[allow(dead_code)]
     pub fn receiver_count(&self) -> usize {
         self.sender.receiver_count()
     }

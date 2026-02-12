@@ -8,7 +8,10 @@
 mod audio;
 mod frame_gen;
 mod nvenc;
+mod nvfruc;
+mod nvfruc_sys;
 mod scaler;
+mod tonemap;
 
 pub use audio::{
     audio_codec_available, list_available_audio_encoders, AudioEncoder, AudioEncoderInfo,
@@ -16,7 +19,9 @@ pub use audio::{
 };
 pub use frame_gen::{FrameGenMode, SmoothMotion, SmoothMotionConfig, supports_smooth_motion};
 pub use nvenc::{EncodedPacket, NvencEncoder};
+pub use nvfruc::{nvfruc_available, NvFruc};
 pub use scaler::FrameScaler;
+pub use tonemap::{TonemapAlgorithm, TonemapConfig, TonemapMode, Tonemapper};
 
 use crate::config::Codec;
 
