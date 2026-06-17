@@ -55,7 +55,7 @@ parking_lot = "0.12"
 bytemuck = { version = "1.19", features = ["derive"] }
 
 # Global hotkeys
-evdev = "0.12"
+evdev = "0.13"
 
 # Ghost ecosystem
 ghoststream = { git = "https://github.com/ghostkellz/ghoststream", rev = "0d16576e2837c56681d1e0855c55c6dd6fd948cc" }
