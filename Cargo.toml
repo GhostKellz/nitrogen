@@ -66,4 +66,4 @@ webrtc = "0.11"
 bytes = "1.9"
 
 # HTTP server for WebRTC signaling
-axum = "0.7"
+axum = "0.8"
