@@ -51,7 +51,7 @@ ghoststream = { workspace = true }
 ghostwave-core = { workspace = true }
 
 # Dynamic library loading for NVIDIA FRUC
-libloading = "0.8"
+libloading = "0.9"
 
 # WebRTC
 webrtc = { workspace = true }
