@@ -3,8 +3,8 @@
 //! Streams encoded video and audio to RTMP or SRT servers.
 //! Supports streaming to services like Twitch, YouTube, or custom servers.
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, warn};
 
@@ -12,9 +12,9 @@ use crate::config::{AudioCodec, Codec};
 use crate::encode::{EncodedAudioPacket, EncodedPacket};
 use crate::error::{NitrogenError, Result};
 
+use ffmpeg::Rational;
 use ffmpeg::codec::Id;
 use ffmpeg::format::{context::Output, output_as};
-use ffmpeg::Rational;
 use ffmpeg_next as ffmpeg;
 
 /// Streaming protocol
@@ -326,7 +326,7 @@ impl StreamOutput {
         self.bytes_sent.fetch_add(size, Ordering::Relaxed);
 
         let count = self.video_packets_sent.load(Ordering::Relaxed);
-        if count % 1000 == 0 {
+        if count.is_multiple_of(1000) {
             let bytes = self.bytes_sent.load(Ordering::Relaxed);
             debug!(
                 "Streamed {} video packets ({:.2} MB)",
@@ -439,10 +439,11 @@ impl StreamOutput {
 
 impl Drop for StreamOutput {
     fn drop(&mut self) {
-        if self.header_written && self.running.load(Ordering::SeqCst) {
-            if let Err(e) = self.output.write_trailer() {
-                error!("Failed to close stream on drop: {}", e);
-            }
+        if self.header_written
+            && self.running.load(Ordering::SeqCst)
+            && let Err(e) = self.output.write_trailer()
+        {
+            error!("Failed to close stream on drop: {}", e);
         }
     }
 }

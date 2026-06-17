@@ -1,6 +1,6 @@
 # Contributing to Nitrogen
 
-Thank you for your interest in contributing to Nitrogen! This guide will help you get started.
+Thank you for your interest in contributing to Nitrogen. This guide will help you get started.
 
 ## Code of Conduct
 
@@ -67,7 +67,7 @@ nitrogen/
 1. Fork and create a feature branch
 2. Make changes with tests
 3. Run `cargo test`, `cargo clippy`, `cargo fmt`
-4. Submit a PR with clear description
+4. Submit a PR with a clear description
 
 ### Commit Messages
 
@@ -105,6 +105,13 @@ test: add pipeline integration tests
 - Check existing issues before creating new ones
 - Include `nitrogen info` output in bug reports
 - Specify your compositor and GPU
+- Use the [documentation index](docs/README.md) when adding or moving docs
+
+## Documentation
+
+Keep `docs/README.md` as an index only. Place documentation under topic folders with lowercase, hyphenated Markdown filenames such as `docs/guides/troubleshooting.md` or `docs/reference/commands.md`.
+
+Use `docs/advisories/` for RustSec and dependency audit notes.
 
 ## License
 

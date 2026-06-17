@@ -7,8 +7,8 @@
 //! use ghoststream's encoding pipeline.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
@@ -19,16 +19,16 @@ use crate::capture::{AudioCaptureStream, CaptureStream};
 use crate::config::{AudioSource, CaptureConfig};
 use crate::encode::{AudioEncoder, NvencEncoder, TonemapConfig, Tonemapper};
 use crate::error::{NitrogenError, Result};
-use crate::output::{
-    create_camera, record_av_from_channels, start_signaling_server, stream_av_from_channels,
-    FileRecorder, RawOutputSink, StreamConfig, StreamOutput, StreamProtocol, VirtualCamera,
-    VirtualMicrophone, WebRTCConfig, WebRTCOutput,
-};
-use tokio::sync::RwLock;
-use crate::overlay::{LatencyOverlay, OverlayConfig};
-use crate::performance::{create_metrics, PerformanceMetrics};
 use crate::formats::fourcc_to_gs_format;
+use crate::output::{
+    FileRecorder, RawOutputSink, StreamConfig, StreamOutput, StreamProtocol, VirtualCamera,
+    VirtualMicrophone, WebRTCConfig, WebRTCOutput, create_camera, record_av_from_channels,
+    start_signaling_server, stream_av_from_channels,
+};
+use crate::overlay::{LatencyOverlay, OverlayConfig};
+use crate::performance::{PerformanceMetrics, create_metrics};
 use crate::types::{AudioFrame, Frame, FrameData, Handle};
+use tokio::sync::RwLock;
 
 // Re-export ghoststream types for frame conversion and scaling
 use ghoststream::processing::{convert_colorspace, scale_frame};
@@ -441,7 +441,10 @@ impl Pipeline {
                             self.encoder.as_ref()
                         }
                         Err(e) => {
-                            warn!("Failed to create encoder for streaming: {}. Streaming disabled.", e);
+                            warn!(
+                                "Failed to create encoder for streaming: {}. Streaming disabled.",
+                                e
+                            );
                             None
                         }
                     }
@@ -502,7 +505,10 @@ impl Pipeline {
                         self.encoder = Some(enc);
                     }
                     Err(e) => {
-                        warn!("Failed to create encoder for WebRTC: {}. WebRTC disabled.", e);
+                        warn!(
+                            "Failed to create encoder for WebRTC: {}. WebRTC disabled.",
+                            e
+                        );
                     }
                 }
             }
@@ -525,9 +531,10 @@ impl Pipeline {
 
                             // Start the signaling server
                             let port = self.config.webrtc_port;
-                            let server_handle = tokio::spawn(async move {
-                                start_signaling_server(output, port).await
-                            });
+                            let server_handle =
+                                tokio::spawn(
+                                    async move { start_signaling_server(output, port).await },
+                                );
                             self.webrtc_server_handle = Some(server_handle);
 
                             info!("WebRTC output enabled - view at http://localhost:{}", port);
@@ -602,12 +609,12 @@ impl Pipeline {
         };
 
         // Check if capture is still running
-        if let Some(ref capture) = self.capture {
-            if !capture.is_running() {
-                warn!("Capture stream stopped unexpectedly");
-                self.state = PipelineState::Error;
-                return Ok(false);
-            }
+        if let Some(ref capture) = self.capture
+            && !capture.is_running()
+        {
+            warn!("Capture stream stopped unexpectedly");
+            self.state = PipelineState::Error;
+            return Ok(false);
         }
 
         // Try to receive a frame with timeout
@@ -647,7 +654,8 @@ impl Pipeline {
 
         // Record frame time for FPS calculation
         if let Some(last_time) = self.last_frame_time {
-            self.metrics.record_frame_time(frame_start.duration_since(last_time));
+            self.metrics
+                .record_frame_time(frame_start.duration_since(last_time));
         }
         self.last_frame_time = Some(frame_start);
 
@@ -658,7 +666,8 @@ impl Pipeline {
                 // Log but don't fail - camera output can still work
                 trace!("Video encoding failed: {}", e);
             } else {
-                self.metrics.record_encode_timing(encode_start, Instant::now());
+                self.metrics
+                    .record_encode_timing(encode_start, Instant::now());
             }
         }
 
@@ -690,7 +699,8 @@ impl Pipeline {
                 // Apply latency overlay if enabled
                 if self.overlay.is_enabled() {
                     let stats = self.metrics.get_stats();
-                    self.overlay.render(&mut processed_data, dst_width, dst_height, &stats);
+                    self.overlay
+                        .render(&mut processed_data, dst_width, dst_height, &stats);
                 }
 
                 Some(GsFrame {
@@ -731,7 +741,12 @@ impl Pipeline {
                                 // Apply latency overlay if enabled
                                 if self.overlay.is_enabled() {
                                     let stats = self.metrics.get_stats();
-                                    self.overlay.render(&mut processed_data, dst_width, dst_height, &stats);
+                                    self.overlay.render(
+                                        &mut processed_data,
+                                        dst_width,
+                                        dst_height,
+                                        &stats,
+                                    );
                                 }
 
                                 Some(GsFrame {
@@ -762,7 +777,8 @@ impl Pipeline {
             }
         };
 
-        self.metrics.record_capture_timing(capture_start, Instant::now());
+        self.metrics
+            .record_capture_timing(capture_start, Instant::now());
 
         // Send to camera
         let output_start = Instant::now();
@@ -774,9 +790,10 @@ impl Pipeline {
                     e, failed
                 );
             } else {
-                self.metrics.record_output_timing(output_start, Instant::now());
+                self.metrics
+                    .record_output_timing(output_start, Instant::now());
                 let count = self.frames_processed.fetch_add(1, Ordering::Relaxed) + 1;
-                if count % 300 == 0 {
+                if count.is_multiple_of(300) {
                     // Log stats every ~5 seconds at 60fps
                     let elapsed = self
                         .start_time
@@ -788,8 +805,14 @@ impl Pipeline {
                     let stats = self.metrics.get_stats();
                     debug!(
                         "Pipeline {}: {} frames ({:.1} fps), {} dropped, {} failed | Latency: cap={:.1}ms enc={:.1}ms out={:.1}ms",
-                        self.handle, count, fps, dropped, failed,
-                        stats.capture_latency_ms, stats.encode_latency_ms, stats.output_latency_ms
+                        self.handle,
+                        count,
+                        fps,
+                        dropped,
+                        failed,
+                        stats.capture_latency_ms,
+                        stats.encode_latency_ms,
+                        stats.output_latency_ms
                     );
                 }
             }
@@ -879,10 +902,10 @@ impl Pipeline {
         }
 
         // Stop camera (using RawOutputSink::finish)
-        if let Some(mut camera) = self.camera.take() {
-            if let Err(e) = camera.finish().await {
-                warn!("Failed to cleanly stop virtual camera: {}", e);
-            }
+        if let Some(mut camera) = self.camera.take()
+            && let Err(e) = camera.finish().await
+        {
+            warn!("Failed to cleanly stop virtual camera: {}", e);
         }
 
         // Stop portal session
@@ -906,7 +929,11 @@ impl Pipeline {
                 self.handle,
                 frames,
                 elapsed,
-                if elapsed > 0.0 { frames as f64 / elapsed } else { 0.0 },
+                if elapsed > 0.0 {
+                    frames as f64 / elapsed
+                } else {
+                    0.0
+                },
                 dropped,
                 audio_samples
             );
@@ -976,10 +1003,8 @@ impl Pipeline {
         }
 
         // Re-subscribe outside of the borrow
-        if needs_resubscribe {
-            if let Some(ref audio_capture) = self.audio_capture {
-                self.audio_frame_rx = Some(audio_capture.subscribe());
-            }
+        if needs_resubscribe && let Some(ref audio_capture) = self.audio_capture {
+            self.audio_frame_rx = Some(audio_capture.subscribe());
         }
     }
 
@@ -1014,7 +1039,14 @@ impl Pipeline {
     /// Toggle the latency overlay on/off
     pub fn toggle_overlay(&mut self) {
         self.overlay.toggle();
-        info!("Latency overlay: {}", if self.overlay.is_enabled() { "enabled" } else { "disabled" });
+        info!(
+            "Latency overlay: {}",
+            if self.overlay.is_enabled() {
+                "enabled"
+            } else {
+                "disabled"
+            }
+        );
     }
 
     /// Check if overlay is enabled

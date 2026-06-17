@@ -9,11 +9,11 @@ use pw::spa::param::format::{MediaSubtype, MediaType};
 use pw::spa::param::format_utils;
 use pw::spa::pod::Pod;
 use pw::spa::utils::Direction;
-use pw::stream::{Stream, StreamFlags, StreamState};
+use pw::stream::{StreamFlags, StreamRc, StreamState};
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace, warn};
 
@@ -177,16 +177,16 @@ fn run_audio_loop(
         is_desktop
     );
 
-    let mainloop = pw::main_loop::MainLoop::new(None)
+    let mainloop = pw::main_loop::MainLoopRc::new(None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create audio main loop: {}", e)))?;
 
     let loop_ = mainloop.loop_();
 
-    let context = pw::context::Context::new(&mainloop)
+    let context = pw::context::ContextRc::new(&mainloop, None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create audio context: {}", e)))?;
 
     let core = context
-        .connect(None)
+        .connect_rc(None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to connect to PipeWire: {}", e)))?;
 
     // Build stream properties
@@ -207,7 +207,7 @@ fn run_audio_loop(
         }
     };
 
-    let stream = Stream::new(&core, "nitrogen-audio", props)
+    let stream = StreamRc::new(core.clone(), "nitrogen-audio", props)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create audio stream: {}", e)))?;
 
     // User data for callbacks

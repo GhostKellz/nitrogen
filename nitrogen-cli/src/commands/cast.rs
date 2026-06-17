@@ -3,9 +3,10 @@
 use anyhow::{Context, Result};
 use clap::Args;
 use nitrogen_core::{
+    TonemapAlgorithm, TonemapMode,
     config::{
-        discord, AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig,
-        ChromaFormat, Codec, ConfigFile, EncoderPreset, MultipassMode, Preset,
+        AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig, ChromaFormat, Codec,
+        ConfigFile, EncoderPreset, MultipassMode, Preset, discord,
     },
     daemon_running,
     gpu::detect_rtx50_features,
@@ -14,7 +15,6 @@ use nitrogen_core::{
     pipeline::Pipeline,
     socket_path,
     types::CaptureSource,
-    TonemapAlgorithm, TonemapMode,
 };
 use std::sync::Arc;
 use tokio::signal;
@@ -275,7 +275,10 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     // Discord preset overrides - apply before other parsing if --discord is specified
     let (preset_str, codec_str, bitrate) = if args.discord {
         info!("Using Discord-optimized preset");
-        println!("Using Discord-optimized preset (1080p60, H.264, {} kbps)", discord::DEFAULT_BITRATE);
+        println!(
+            "Using Discord-optimized preset (1080p60, H.264, {} kbps)",
+            discord::DEFAULT_BITRATE
+        );
 
         // Warn about incompatible options
         if args.resolution.is_some() || args.fps.is_some() {
@@ -285,10 +288,17 @@ pub async fn cast(args: CastArgs) -> Result<()> {
             warn!("--discord overrides codec to H.264 for compatibility");
         }
         if args.bitrate != 0 {
-            warn!("--discord overrides custom bitrate to {} kbps", discord::DEFAULT_BITRATE);
+            warn!(
+                "--discord overrides custom bitrate to {} kbps",
+                discord::DEFAULT_BITRATE
+            );
         }
 
-        ("1080p60".to_string(), "h264".to_string(), discord::DEFAULT_BITRATE)
+        (
+            "1080p60".to_string(),
+            "h264".to_string(),
+            discord::DEFAULT_BITRATE,
+        )
     } else {
         (preset_str.to_string(), codec_str.to_string(), bitrate)
     };
@@ -340,7 +350,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Invalid quality '{}'. Valid options: fast, medium, slow, quality",
                 quality_str
-            ))
+            ));
         }
     };
 
@@ -359,7 +369,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Invalid audio source '{}'. Valid options: none, desktop, mic, both",
                 audio_source_str
-            ))
+            ));
         }
     };
 
@@ -376,7 +386,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
             return Err(anyhow::anyhow!(
                 "Invalid audio codec '{}'. Valid options: aac, opus",
                 audio_codec_str
-            ))
+            ));
         }
     };
 
@@ -388,7 +398,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     };
 
     // Parse frame generation mode for Smooth Motion
-    let frame_gen = nitrogen_core::encode::FrameGenMode::from_str(&args.frame_gen);
+    let frame_gen = nitrogen_core::encode::FrameGenMode::from(args.frame_gen.as_str());
     if frame_gen != nitrogen_core::encode::FrameGenMode::Off {
         if !nitrogen_core::encode::supports_smooth_motion() {
             warn!("Smooth Motion requested but GPU may not support optical flow optimally");
@@ -430,7 +440,10 @@ pub async fn cast(args: CastArgs) -> Result<()> {
     };
 
     if hdr_tonemap != TonemapMode::Off {
-        info!("HDR tonemapping: {} with {} algorithm", hdr_tonemap_str, hdr_algorithm_str);
+        info!(
+            "HDR tonemapping: {} with {} algorithm",
+            hdr_tonemap_str, hdr_algorithm_str
+        );
     }
 
     // Determine capture source
@@ -453,7 +466,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
                 return Err(anyhow::anyhow!(
                     "Invalid AV1 tier '{}'. Valid options: main, high",
                     args.av1_tier
-                ))
+                ));
             }
         };
 
@@ -468,7 +481,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
                 return Err(anyhow::anyhow!(
                     "Invalid AV1 tune '{}'. Valid options: hq, uhq, ll, ull, lossless",
                     args.av1_tune
-                ))
+                ));
             }
         };
 
@@ -481,7 +494,7 @@ pub async fn cast(args: CastArgs) -> Result<()> {
                 return Err(anyhow::anyhow!(
                     "Invalid AV1 chroma format '{}'. Valid options: 420, 422, 444",
                     args.av1_chroma
-                ))
+                ));
             }
         };
 
@@ -514,11 +527,23 @@ pub async fn cast(args: CastArgs) -> Result<()> {
                     }
                     Err(e) => {
                         debug!("RTX 50 detection failed: {}, using defaults", e);
-                        (av1_tune, args.av1_temporal_aq, av1_chroma, args.av1_b_ref, args.av1_lookahead_depth)
+                        (
+                            av1_tune,
+                            args.av1_temporal_aq,
+                            av1_chroma,
+                            args.av1_b_ref,
+                            args.av1_lookahead_depth,
+                        )
                     }
                 }
             } else {
-                (av1_tune, args.av1_temporal_aq, av1_chroma, args.av1_b_ref, args.av1_lookahead_depth)
+                (
+                    av1_tune,
+                    args.av1_temporal_aq,
+                    av1_chroma,
+                    args.av1_b_ref,
+                    args.av1_lookahead_depth,
+                )
             };
 
         Av1Config {
@@ -560,11 +585,14 @@ pub async fn cast(args: CastArgs) -> Result<()> {
         hdr_peak_luminance,
         camera_enabled: !args.no_camera,
         overlay_enabled: args.overlay || file_config.overlay.enabled,
-        overlay_position: OverlayPosition::from_str(&if args.overlay_position == "top-left" {
-            file_config.overlay.position.clone()
-        } else {
-            args.overlay_position.clone()
-        }),
+        overlay_position: OverlayPosition::from(
+            if args.overlay_position == "top-left" {
+                file_config.overlay.position.clone()
+            } else {
+                args.overlay_position.clone()
+            }
+            .as_str(),
+        ),
         stream_url: args.stream.clone(),
         webrtc_enabled: args.webrtc,
         webrtc_port: args.webrtc_port,
@@ -658,7 +686,10 @@ pub async fn cast(args: CastArgs) -> Result<()> {
         .await
         .context("Failed to create pipeline")?;
 
-    // Wrap pipeline in Arc<RwLock> for sharing with IPC server
+    // Wrap pipeline in Arc<RwLock> for sharing with IPC server.
+    // The Arc only lives within this single-threaded async context, but the
+    // IpcServer API requires Arc, so the non-Send/Sync inner type is fine here.
+    #[allow(clippy::arc_with_non_send_sync)]
     let pipeline = Arc::new(RwLock::new(Some(pipeline)));
 
     // Start IPC server (unless --no-daemon)

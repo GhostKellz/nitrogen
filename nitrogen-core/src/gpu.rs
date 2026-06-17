@@ -103,14 +103,10 @@ fn query_gpu_name(gpu_index: u32) -> Result<String> {
         .map_err(|e| NitrogenError::Nvenc(format!("Failed to run nvidia-smi: {}", e)))?;
 
     if !output.status.success() {
-        return Err(NitrogenError::Nvenc(
-            "nvidia-smi query failed".to_string(),
-        ));
+        return Err(NitrogenError::Nvenc("nvidia-smi query failed".to_string()));
     }
 
-    let name = String::from_utf8_lossy(&output.stdout)
-        .trim()
-        .to_string();
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
     if name.is_empty() {
         return Err(NitrogenError::Nvenc(
@@ -189,11 +185,7 @@ pub fn get_recommended_av1_settings(gpu_index: u32) -> Result<RecommendedAv1Sett
 
     Ok(RecommendedAv1Settings {
         generation,
-        tune: if features.uhq_supported {
-            "uhq"
-        } else {
-            "hq"
-        },
+        tune: if features.uhq_supported { "uhq" } else { "hq" },
         temporal_aq: features.temporal_aq_supported,
         lookahead_depth: if features.extended_lookahead { 100 } else { 20 },
         b_ref_mode: features.b_ref_supported,

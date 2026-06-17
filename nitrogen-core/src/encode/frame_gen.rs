@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 use crate::types::Frame;
 
-use super::nvfruc::{nvfruc_available, NvFruc};
+use super::nvfruc::{NvFruc, nvfruc_available};
 
 /// Frame generation mode
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -47,9 +47,10 @@ impl FrameGenMode {
     pub fn output_fps(&self, input_fps: u32) -> u32 {
         input_fps * self.multiplier()
     }
+}
 
-    /// Parse from string
-    pub fn from_str(s: &str) -> Self {
+impl From<&str> for FrameGenMode {
+    fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "off" | "none" | "0" => FrameGenMode::Off,
             "double" | "2x" | "2" => FrameGenMode::Double,
@@ -308,13 +309,13 @@ impl SmoothMotion {
     /// Interpolate between two frames at time t (0.0 to 1.0)
     fn interpolate_frame(&mut self, prev: &Frame, curr: &Frame, t: f32) -> Result<Frame> {
         // Try GPU interpolation first if available
-        if self.config.gpu_accelerated {
-            if let Some(ref mut fruc) = self.nvfruc {
-                match fruc.interpolate(prev, curr, t) {
-                    Ok(frame) => return Ok(frame),
-                    Err(e) => {
-                        debug!("NvFRUC interpolation failed: {}, falling back to CPU", e);
-                    }
+        if self.config.gpu_accelerated
+            && let Some(ref mut fruc) = self.nvfruc
+        {
+            match fruc.interpolate(prev, curr, t) {
+                Ok(frame) => return Ok(frame),
+                Err(e) => {
+                    debug!("NvFRUC interpolation failed: {}, falling back to CPU", e);
                 }
             }
         }
@@ -399,7 +400,11 @@ impl SmoothMotion {
 
         let data = match &frame.data {
             FrameData::Memory(bytes) => FrameData::Memory(bytes.clone()),
-            FrameData::DmaBuf { fd, offset, modifier } => {
+            FrameData::DmaBuf {
+                fd,
+                offset,
+                modifier,
+            } => {
                 // DMA-BUF interpolation requires GPU compute - not yet implemented.
                 // For now, just reference the same fd (caller must handle lifetime).
                 // This means no smoothing for DMA-BUF frames, but also no artifacts.
@@ -412,7 +417,7 @@ impl SmoothMotion {
         };
 
         Ok(Frame {
-            format: frame.format.clone(),
+            format: frame.format,
             data,
             pts: frame.pts,
             hdr_metadata: frame.hdr_metadata,
@@ -529,20 +534,18 @@ fn check_optical_flow_available() -> bool {
     if let Ok(output) = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=driver_version", "--format=csv,noheader"])
         .output()
+        && output.status.success()
     {
-        if output.status.success() {
-            let version = String::from_utf8_lossy(&output.stdout);
-            let version = version.trim();
+        let version = String::from_utf8_lossy(&output.stdout);
+        let version = version.trim();
 
-            // Optical Flow requires driver 418+
-            if let Some(major) = version.split('.').next() {
-                if let Ok(major_ver) = major.parse::<u32>() {
-                    if major_ver >= 418 {
-                        debug!("Driver {} supports Optical Flow", version);
-                        return true;
-                    }
-                }
-            }
+        // Optical Flow requires driver 418+
+        if let Some(major) = version.split('.').next()
+            && let Ok(major_ver) = major.parse::<u32>()
+            && major_ver >= 418
+        {
+            debug!("Driver {} supports Optical Flow", version);
+            return true;
         }
     }
 
@@ -554,14 +557,13 @@ pub fn supports_smooth_motion() -> bool {
     if let Ok(output) = std::process::Command::new("nvidia-smi")
         .args(["--query-gpu=name", "--format=csv,noheader"])
         .output()
+        && output.status.success()
     {
-        if output.status.success() {
-            let name = String::from_utf8_lossy(&output.stdout);
-            let name = name.trim();
+        let name = String::from_utf8_lossy(&output.stdout);
+        let name = name.trim();
 
-            // RTX series supports optical flow-based interpolation
-            return name.contains("RTX");
-        }
+        // RTX series supports optical flow-based interpolation
+        return name.contains("RTX");
     }
     false
 }
@@ -606,9 +608,9 @@ mod tests {
 
     #[test]
     fn test_from_str() {
-        assert_eq!(FrameGenMode::from_str("2x"), FrameGenMode::Double);
-        assert_eq!(FrameGenMode::from_str("off"), FrameGenMode::Off);
-        assert_eq!(FrameGenMode::from_str("adaptive"), FrameGenMode::Adaptive);
+        assert_eq!(FrameGenMode::from("2x"), FrameGenMode::Double);
+        assert_eq!(FrameGenMode::from("off"), FrameGenMode::Off);
+        assert_eq!(FrameGenMode::from("adaptive"), FrameGenMode::Adaptive);
     }
 
     #[test]
@@ -667,7 +669,11 @@ mod tests {
         // Midpoint interpolation of 0 and 255 should be ~128
         if let FrameData::Memory(data) = &interp.data {
             // Check first pixel (should be around 128)
-            assert!(data[0] >= 126 && data[0] <= 130, "Expected ~128, got {}", data[0]);
+            assert!(
+                data[0] >= 126 && data[0] <= 130,
+                "Expected ~128, got {}",
+                data[0]
+            );
         } else {
             panic!("Expected Memory frame data");
         }
@@ -685,7 +691,11 @@ mod tests {
 
         // t=0.25: result = 0 * 0.75 + 200 * 0.25 = 50
         if let FrameData::Memory(data) = &interp.data {
-            assert!(data[0] >= 48 && data[0] <= 52, "Expected ~50, got {}", data[0]);
+            assert!(
+                data[0] >= 48 && data[0] <= 52,
+                "Expected ~50, got {}",
+                data[0]
+            );
         } else {
             panic!("Expected Memory frame data");
         }
@@ -703,21 +713,23 @@ mod tests {
     #[test]
     fn test_histogram_difference_identical() {
         let data = vec![128u8; 1920 * 1080 * 4];
-        let diff = compute_histogram_difference(
-            &data, &data,
-            1920, 1080, 1920 * 4, 0x34325258
+        let diff = compute_histogram_difference(&data, &data, 1920, 1080, 1920 * 4, 0x34325258);
+        assert!(
+            diff < 0.01,
+            "Identical frames should have near-zero difference, got {}",
+            diff
         );
-        assert!(diff < 0.01, "Identical frames should have near-zero difference, got {}", diff);
     }
 
     #[test]
     fn test_histogram_difference_opposite() {
         let black = vec![0u8; 1920 * 1080 * 4];
         let white = vec![255u8; 1920 * 1080 * 4];
-        let diff = compute_histogram_difference(
-            &black, &white,
-            1920, 1080, 1920 * 4, 0x34325258
+        let diff = compute_histogram_difference(&black, &white, 1920, 1080, 1920 * 4, 0x34325258);
+        assert!(
+            diff > 0.3,
+            "Black vs white should have high difference, got {}",
+            diff
         );
-        assert!(diff > 0.3, "Black vs white should have high difference, got {}", diff);
     }
 }

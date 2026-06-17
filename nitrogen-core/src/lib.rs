@@ -33,19 +33,28 @@ pub mod performance;
 pub mod pipeline;
 pub mod types;
 
-pub use config::{AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig, ChromaFormat, Codec, EncoderPreset, MultipassMode, Preset};
+pub use config::{
+    AudioCodec, AudioSource, Av1Config, Av1Tier, Av1Tune, CaptureConfig, ChromaFormat, Codec,
+    EncoderPreset, MultipassMode, Preset,
+};
 pub use encode::{TonemapAlgorithm, TonemapConfig, TonemapMode, Tonemapper};
-pub use env::{detect_environment, is_steam_deck_hardware, RuntimeEnvironment, GamescopeInfo, WaylandInfo, EnvironmentOptimizations};
+pub use env::{
+    EnvironmentOptimizations, GamescopeInfo, RuntimeEnvironment, WaylandInfo, detect_environment,
+    is_steam_deck_hardware,
+};
 pub use error::{NitrogenError, Result};
-pub use performance::{create_metrics, query_gpu_stats, GpuStats, LatencyStats, PerformanceMetrics};
-pub use overlay::{LatencyOverlay, OverlayConfig, OverlayPosition};
-pub use gpu::{detect_rtx50_features, get_gpu_generation, GpuGeneration, RecommendedAv1Settings, Rtx50Features};
+pub use gpu::{
+    GpuGeneration, RecommendedAv1Settings, Rtx50Features, detect_rtx50_features, get_gpu_generation,
+};
 pub use hotkeys::{Hotkey, HotkeyAction, HotkeyListener};
-pub use ipc::{daemon_running, socket_path, IpcClient, IpcServer};
+pub use ipc::{IpcClient, IpcServer, daemon_running, socket_path};
 pub use output::{
-    FileRecorder, StreamConfig, StreamOutput, StreamProtocol,
-    WebRTCConfig, WebRTCOutput, start_signaling_server,
-    stream_av_from_channels, stream_from_channel,
+    FileRecorder, StreamConfig, StreamOutput, StreamProtocol, WebRTCConfig, WebRTCOutput,
+    start_signaling_server, stream_av_from_channels, stream_from_channel,
+};
+pub use overlay::{LatencyOverlay, OverlayConfig, OverlayPosition};
+pub use performance::{
+    GpuStats, LatencyStats, PerformanceMetrics, create_metrics, query_gpu_stats,
 };
 pub use pipeline::{Pipeline, PipelineState, PipelineStats};
 pub use types::{

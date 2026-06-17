@@ -9,13 +9,13 @@ use pw::spa::param::format_utils;
 use pw::spa::param::video::VideoFormat;
 use pw::spa::pod::Pod;
 use pw::spa::utils::{Direction, Fraction, Rectangle};
-use pw::stream::{Stream, StreamFlags, StreamState};
+use pw::stream::{StreamFlags, StreamRc, StreamState};
 
 use std::os::fd::OwnedFd;
 use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{debug, error, info, trace, warn};
 
@@ -44,7 +44,7 @@ struct VideoInfo {
 
 impl VideoInfo {
     /// Convert SPA VideoFormat to DRM fourcc
-    fn to_fourcc(&self) -> u32 {
+    fn to_fourcc(self) -> u32 {
         match self.format {
             VideoFormat::BGRx => 0x34325258, // XR24
             VideoFormat::BGRA => 0x34324142, // AB24
@@ -222,18 +222,18 @@ fn run_pipewire_loop(
     info!("Initializing PipeWire capture for node {}", node_id);
 
     // Create main loop
-    let mainloop = pw::main_loop::MainLoop::new(None)
+    let mainloop = pw::main_loop::MainLoopRc::new(None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create main loop: {}", e)))?;
 
     let loop_ = mainloop.loop_();
 
     // Create context
-    let context = pw::context::Context::new(&mainloop)
+    let context = pw::context::ContextRc::new(&mainloop, None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create context: {}", e)))?;
 
     // Connect using the portal's file descriptor
     let core = context
-        .connect_fd(fd, None)
+        .connect_fd_rc(fd, None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to connect to PipeWire fd: {}", e)))?;
 
     // User data for callbacks
@@ -250,8 +250,8 @@ fn run_pipewire_loop(
     };
 
     // Create stream
-    let stream = Stream::new(
-        &core,
+    let stream = StreamRc::new(
+        core.clone(),
         "nitrogen-capture",
         pw::properties::properties! {
             *pw::keys::MEDIA_TYPE => "Video",
@@ -490,7 +490,6 @@ fn run_pipewire_loop(
             if let Some(mainloop) = mainloop_weak.upgrade() {
                 mainloop.quit();
             }
-            return;
         }
     });
 

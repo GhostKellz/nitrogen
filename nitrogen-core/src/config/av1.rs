@@ -170,8 +170,8 @@ impl Av1Config {
             lookahead: true,
             lookahead_depth: 250, // Extended lookahead on Blackwell
             spatial_aq: true,
-            temporal_aq: true, // New on Blackwell
-            tune: Av1Tune::Uhq, // Ultra High Quality mode
+            temporal_aq: true,            // New on Blackwell
+            tune: Av1Tune::Uhq,           // Ultra High Quality mode
             chroma: ChromaFormat::Yuv420, // 422 available but less compatible
             multipass: MultipassMode::Full,
             b_ref_mode: true,

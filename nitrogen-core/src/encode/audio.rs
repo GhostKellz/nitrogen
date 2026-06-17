@@ -202,7 +202,8 @@ impl AudioEncoder {
         let samples_per_frame = self.frame_size * self.input_channels as usize;
 
         while self.sample_buffer.len() >= samples_per_frame {
-            self.encode_frame(&self.sample_buffer[..samples_per_frame].to_vec())?;
+            let frame: Vec<f32> = self.sample_buffer[..samples_per_frame].to_vec();
+            self.encode_frame(&frame)?;
             self.sample_buffer.drain(..samples_per_frame);
         }
 
@@ -255,6 +256,10 @@ impl AudioEncoder {
                     let _ = self.output_tx.send(Arc::new(packet));
                 }
                 Err(ffmpeg::Error::Other { errno }) if errno == ffmpeg::error::EAGAIN => {
+                    break;
+                }
+                Err(ffmpeg::Error::Eof) => {
+                    // Encoder fully drained after send_eof() during flush
                     break;
                 }
                 Err(e) => {
@@ -349,8 +354,8 @@ mod tests {
 
     #[test]
     fn test_list_audio_encoders() {
-        let encoders = list_available_audio_encoders();
-        // Should at least have AAC (built into FFmpeg)
-        assert!(!encoders.is_empty() || true); // Don't fail if FFmpeg not available
+        // Just verify the call succeeds; the encoder list may be empty if
+        // FFmpeg is not available in the test environment.
+        let _encoders = list_available_audio_encoders();
     }
 }

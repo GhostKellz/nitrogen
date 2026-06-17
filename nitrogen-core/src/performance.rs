@@ -6,11 +6,11 @@
 //! - Dropped frame counting
 //! - GPU monitoring (temperature, power, utilization)
 
-use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use parking_lot::RwLock;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 /// Maximum number of samples to keep for rolling averages
 const MAX_SAMPLES: usize = 120;

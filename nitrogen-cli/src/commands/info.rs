@@ -4,7 +4,7 @@ use anyhow::Result;
 use nitrogen_core::capture;
 use nitrogen_core::config::Codec;
 use nitrogen_core::encode;
-use nitrogen_core::env::{detect_environment, RuntimeEnvironment};
+use nitrogen_core::env::{RuntimeEnvironment, detect_environment};
 
 /// Show system information and NVENC capabilities
 pub async fn info() -> Result<()> {
@@ -105,7 +105,10 @@ pub async fn info() -> Result<()> {
 
     match &env {
         RuntimeEnvironment::Gamescope(info) => {
-            println!("  Steam Deck:  {}", if info.steam_deck { "yes" } else { "no" });
+            println!(
+                "  Steam Deck:  {}",
+                if info.steam_deck { "yes" } else { "no" }
+            );
             println!("  Nested:      {}", if info.nested { "yes" } else { "no" });
             if let Some(display) = &info.display {
                 println!("  Display:     {}", display);
@@ -118,7 +121,10 @@ pub async fn info() -> Result<()> {
             }
         }
         RuntimeEnvironment::X11 => {
-            println!("  Display:     {}", std::env::var("DISPLAY").unwrap_or_else(|_| "unknown".to_string()));
+            println!(
+                "  Display:     {}",
+                std::env::var("DISPLAY").unwrap_or_else(|_| "unknown".to_string())
+            );
         }
         RuntimeEnvironment::Unknown => {}
     }

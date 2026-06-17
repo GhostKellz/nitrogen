@@ -3,14 +3,14 @@
 //! Provides hardware-accelerated frame interpolation using NVIDIA's
 //! Optical Flow hardware on Turing+ GPUs.
 
+use parking_lot::Mutex;
 use std::ptr;
 use std::sync::Arc;
-use parking_lot::Mutex;
 use tracing::{debug, info, warn};
 
 use super::nvfruc_sys::{
-    NvOFFRUCLib, NvOFFRUC_CREATE_PARAM, NvOFFRUCCUDAResourceType, NvOFFRUCHandle,
-    NvOFFRUC_PROCESS_IN_PARAMS, NvOFFRUC_PROCESS_OUT_PARAMS, NvOFFRUC_FRAMEDATA,
+    NvOFFRUC_CREATE_PARAM, NvOFFRUC_FRAMEDATA, NvOFFRUC_PROCESS_IN_PARAMS,
+    NvOFFRUC_PROCESS_OUT_PARAMS, NvOFFRUCCUDAResourceType, NvOFFRUCHandle, NvOFFRUCLib,
     NvOFFRUCResourceType, NvOFFRUCSurfaceFormat,
 };
 use crate::error::{NitrogenError, Result};
@@ -74,10 +74,7 @@ impl NvFruc {
             )));
         }
 
-        info!(
-            "NvOFFRUC initialized: {}x{} ARGB",
-            width, height
-        );
+        info!("NvOFFRUC initialized: {}x{} ARGB", width, height);
 
         Ok(Self {
             lib,
@@ -193,7 +190,15 @@ impl NvFruc {
                 status.to_error_string()
             );
             // Fall back to CPU blend
-            return self.cpu_blend(prev_data, curr_data, t, &prev.format, prev.pts, curr.pts, prev.hdr_metadata);
+            return self.cpu_blend(
+                prev_data,
+                curr_data,
+                t,
+                &prev.format,
+                prev.pts,
+                curr.pts,
+                prev.hdr_metadata,
+            );
         }
 
         // Interpolate PTS
@@ -209,6 +214,7 @@ impl NvFruc {
     }
 
     /// CPU fallback blend when GPU processing fails
+    #[allow(clippy::too_many_arguments)]
     fn cpu_blend(
         &self,
         prev: &[u8],
@@ -225,9 +231,7 @@ impl NvFruc {
         let blended: Vec<u8> = prev
             .iter()
             .zip(curr.iter())
-            .map(|(&p, &c)| {
-                (((p as u16 * inv_t_fixed) + (c as u16 * t_fixed)) >> 8) as u8
-            })
+            .map(|(&p, &c)| (((p as u16 * inv_t_fixed) + (c as u16 * t_fixed)) >> 8) as u8)
             .collect();
 
         let duration = curr_pts.saturating_sub(prev_pts);
@@ -259,7 +263,10 @@ impl Drop for NvFruc {
             // This is called only once during Drop, and the handle becomes invalid after.
             let status = unsafe { (self.lib.destroy)(self.handle) };
             if !status.is_success() {
-                warn!("Failed to destroy NvOFFRUC instance: {}", status.to_error_string());
+                warn!(
+                    "Failed to destroy NvOFFRUC instance: {}",
+                    status.to_error_string()
+                );
             } else {
                 debug!("NvOFFRUC instance destroyed");
             }
@@ -291,8 +298,8 @@ pub fn nvfruc_available() -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use super::super::nvfruc_sys::NvOFFRUC_STATUS;
+    use super::*;
 
     #[test]
     fn test_nvfruc_availability_check() {
@@ -303,8 +310,14 @@ mod tests {
     #[test]
     fn test_status_error_strings() {
         assert_eq!(NvOFFRUC_STATUS::SUCCESS.to_error_string(), "Success");
-        assert_eq!(NvOFFRUC_STATUS::ERR_GENERIC.to_error_string(), "Generic error");
-        assert_eq!(NvOFFRUC_STATUS::ERR_NOT_SUPPORTED.to_error_string(), "Optical flow not supported on this hardware");
+        assert_eq!(
+            NvOFFRUC_STATUS::ERR_GENERIC.to_error_string(),
+            "Generic error"
+        );
+        assert_eq!(
+            NvOFFRUC_STATUS::ERR_NOT_SUPPORTED.to_error_string(),
+            "Optical flow not supported on this hardware"
+        );
     }
 
     #[test]

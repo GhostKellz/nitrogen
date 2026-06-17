@@ -35,7 +35,8 @@
   <a href="#requirements">Requirements</a> •
   <a href="#installation">Installation</a> •
   <a href="#usage">Usage</a> •
-  <a href="#how-it-works">How It Works</a>
+  <a href="#how-it-works">How It Works</a> •
+  <a href="docs/README.md">Docs</a>
 </p>
 
 ---
@@ -365,6 +366,8 @@ max_latency_ms = 50
 - Check FFmpeg has NVENC: `ffmpeg -encoders | grep nvenc`
 - Verify GPU supports NVENC (GTX 600 or newer)
 </details>
+
+Full troubleshooting notes are in [docs/guides/troubleshooting.md](docs/guides/troubleshooting.md). The full documentation index is [docs/README.md](docs/README.md).
 
 <details>
 <summary><b>Black screen in Discord</b></summary>

@@ -5,8 +5,8 @@
 
 use evdev::{Device, InputEventKind, Key};
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::mpsc;
 use tracing::{debug, error, info, trace, warn};
 
@@ -298,27 +298,29 @@ fn find_keyboard_devices() -> Vec<Device> {
     let mut devices = Vec::new();
 
     // Scan /dev/input/event* for keyboard devices
-    for entry in std::fs::read_dir("/dev/input").into_iter().flatten() {
-        if let Ok(entry) = entry {
-            let path = entry.path();
-            if path.to_string_lossy().contains("event") {
-                match Device::open(&path) {
-                    Ok(device) => {
-                        // Check if this device has keyboard capabilities
-                        if device.supported_keys().map_or(false, |keys| {
-                            keys.contains(Key::KEY_A) && keys.contains(Key::KEY_ENTER)
-                        }) {
-                            debug!(
-                                "Found keyboard device: {:?} - {}",
-                                path,
-                                device.name().unwrap_or("unknown")
-                            );
-                            devices.push(device);
-                        }
+    for entry in std::fs::read_dir("/dev/input")
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let path = entry.path();
+        if path.to_string_lossy().contains("event") {
+            match Device::open(&path) {
+                Ok(device) => {
+                    // Check if this device has keyboard capabilities
+                    if device.supported_keys().is_some_and(|keys| {
+                        keys.contains(Key::KEY_A) && keys.contains(Key::KEY_ENTER)
+                    }) {
+                        debug!(
+                            "Found keyboard device: {:?} - {}",
+                            path,
+                            device.name().unwrap_or("unknown")
+                        );
+                        devices.push(device);
                     }
-                    Err(e) => {
-                        trace!("Could not open {:?}: {}", path, e);
-                    }
+                }
+                Err(e) => {
+                    trace!("Could not open {:?}: {}", path, e);
                 }
             }
         }

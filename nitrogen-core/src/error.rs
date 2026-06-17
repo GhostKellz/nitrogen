@@ -105,39 +105,39 @@ impl NitrogenError {
         match self {
             Self::Portal(_) => Some(
                 "Ensure xdg-desktop-portal is running and your compositor supports screen sharing.\n\
-                 Try: systemctl --user restart xdg-desktop-portal"
+                 Try: systemctl --user restart xdg-desktop-portal",
             ),
             Self::PipeWire(_) => Some(
                 "Ensure PipeWire is running: systemctl --user status pipewire\n\
-                 Try: systemctl --user restart pipewire"
+                 Try: systemctl --user restart pipewire",
             ),
             Self::Encoder(_) => Some(
                 "Check that FFmpeg was compiled with NVENC support.\n\
-                 Try: ffmpeg -encoders | grep nvenc"
+                 Try: ffmpeg -encoders | grep nvenc",
             ),
             Self::Nvenc(_) => Some(
                 "Ensure you have an NVIDIA GPU with NVENC support (GTX 600+ or Quadro K series+)\n\
                  and the proprietary NVIDIA drivers installed.\n\
-                 Try: nvidia-smi"
+                 Try: nvidia-smi",
             ),
-            Self::Config(_) => Some(
-                "Check your configuration file at ~/.config/nitrogen/config.toml"
-            ),
+            Self::Config(_) => {
+                Some("Check your configuration file at ~/.config/nitrogen/config.toml")
+            }
             Self::SourceNotFound(_) => Some(
                 "Use 'nitrogen list' to see available capture sources,\n\
-                 or omit the source to use the portal picker."
+                 or omit the source to use the portal picker.",
             ),
-            Self::NoActiveSession => Some(
-                "No capture session is currently running. Start one with: nitrogen cast"
-            ),
+            Self::NoActiveSession => {
+                Some("No capture session is currently running. Start one with: nitrogen cast")
+            }
             Self::SessionAlreadyRunning => Some(
                 "A capture session is already running.\n\
-                 Use 'nitrogen stop' to stop it first, or 'nitrogen status' to check its state."
+                 Use 'nitrogen stop' to stop it first, or 'nitrogen status' to check its state.",
             ),
             Self::Unsupported(_) => None,
             Self::WebRTC(_) => Some(
                 "Check your network configuration and ensure ICE servers are accessible.\n\
-                 WebRTC requires proper network connectivity for peer-to-peer streaming."
+                 WebRTC requires proper network connectivity for peer-to-peer streaming.",
             ),
             Self::Io(_) => None,
             Self::WithContext { source, .. } => source.user_hint(),

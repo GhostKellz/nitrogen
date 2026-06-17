@@ -1,7 +1,7 @@
 //! Status command - show status of running capture
 
 use anyhow::Result;
-use nitrogen_core::{daemon_running, socket_path, IpcClient};
+use nitrogen_core::{IpcClient, daemon_running, socket_path};
 
 /// Show status of running capture
 pub async fn status() -> Result<()> {

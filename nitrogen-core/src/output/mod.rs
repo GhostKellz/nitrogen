@@ -13,13 +13,13 @@ mod virtual_audio;
 mod webrtc;
 
 // Re-export ghoststream's virtual camera and traits
-pub use file::{record_av_from_channels, record_from_channel, FileRecorder};
+pub use file::{FileRecorder, record_av_from_channels, record_from_channel};
 pub use ghoststream::output::{RawOutputSink, VirtualCamera};
 pub use stream::{
-    stream_av_from_channels, stream_from_channel, StreamConfig, StreamOutput, StreamProtocol,
+    StreamConfig, StreamOutput, StreamProtocol, stream_av_from_channels, stream_from_channel,
 };
-pub use virtual_audio::{VirtualMicrophone, DEFAULT_VIRTUAL_MIC_NAME};
-pub use webrtc::{start_signaling_server, WebRTCConfig, WebRTCOutput};
+pub use virtual_audio::{DEFAULT_VIRTUAL_MIC_NAME, VirtualMicrophone};
+pub use webrtc::{WebRTCConfig, WebRTCOutput, start_signaling_server};
 
 /// Default camera name
 pub const DEFAULT_CAMERA_NAME: &str = "Nitrogen Camera";

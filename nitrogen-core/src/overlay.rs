@@ -17,9 +17,8 @@ pub enum OverlayPosition {
     BottomRight,
 }
 
-impl OverlayPosition {
-    /// Parse from string
-    pub fn from_str(s: &str) -> Self {
+impl From<&str> for OverlayPosition {
+    fn from(s: &str) -> Self {
         match s.to_lowercase().as_str() {
             "top-right" | "topright" | "tr" => Self::TopRight,
             "bottom-left" | "bottomleft" | "bl" => Self::BottomLeft,
@@ -171,15 +170,33 @@ impl LatencyOverlay {
 
         // Draw semi-transparent background
         let bg_alpha = (self.config.background_opacity * 255.0) as u8;
-        self.draw_rect(frame, width, height, box_x, box_y, box_width, box_height, [0, 0, 0, bg_alpha]);
+        self.draw_rect(
+            frame,
+            width,
+            height,
+            box_x,
+            box_y,
+            box_width,
+            box_height,
+            [0, 0, 0, bg_alpha],
+        );
 
         // Draw text
         let text_x = box_x + padding;
         let text_y = box_y + padding;
-        self.draw_text(frame, width, height, text_x, text_y, &text, [255, 255, 255, 255]);
+        self.draw_text(
+            frame,
+            width,
+            height,
+            text_x,
+            text_y,
+            &text,
+            [255, 255, 255, 255],
+        );
     }
 
     /// Draw a filled rectangle with alpha blending
+    #[allow(clippy::too_many_arguments)]
     fn draw_rect(
         &self,
         frame: &mut [u8],
@@ -210,6 +227,7 @@ impl LatencyOverlay {
     }
 
     /// Draw text using simple bitmap font
+    #[allow(clippy::too_many_arguments)]
     fn draw_text(
         &self,
         frame: &mut [u8],
@@ -230,6 +248,7 @@ impl LatencyOverlay {
     }
 
     /// Draw a single character using 5x7 bitmap font
+    #[allow(clippy::too_many_arguments)]
     fn draw_char(
         &self,
         frame: &mut [u8],
@@ -259,7 +278,7 @@ impl LatencyOverlay {
                             if fx < width && fy < height {
                                 let idx = fy as usize * stride + fx as usize * 4;
                                 if idx + 3 < frame.len() {
-                                    frame[idx] = color[0];     // B
+                                    frame[idx] = color[0]; // B
                                     frame[idx + 1] = color[1]; // G
                                     frame[idx + 2] = color[2]; // R
                                     frame[idx + 3] = color[3]; // A
@@ -277,50 +296,138 @@ impl LatencyOverlay {
 /// Each byte represents one row, with 5 bits used (high bits)
 fn get_char_bitmap(ch: char) -> [u8; 7] {
     match ch {
-        '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
-        '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        '2' => [0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111],
-        '3' => [0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110],
-        '4' => [0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010],
-        '5' => [0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110],
-        '6' => [0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110],
-        '7' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000],
-        '8' => [0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110],
-        '9' => [0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100],
-        'a' | 'A' => [0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
-        'b' | 'B' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110],
-        'c' | 'C' => [0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110],
-        'd' | 'D' => [0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110],
-        'e' | 'E' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111],
-        'f' | 'F' => [0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000],
-        'g' | 'G' => [0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01110],
-        'h' | 'H' => [0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001],
-        'i' | 'I' => [0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
-        'j' | 'J' => [0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100],
-        'k' | 'K' => [0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001],
-        'l' | 'L' => [0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111],
-        'm' | 'M' => [0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001],
-        'n' | 'N' => [0b10001, 0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001],
-        'o' | 'O' => [0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
-        'p' | 'P' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000],
-        'q' | 'Q' => [0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101],
-        'r' | 'R' => [0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001],
-        's' | 'S' => [0b01110, 0b10001, 0b10000, 0b01110, 0b00001, 0b10001, 0b01110],
-        't' | 'T' => [0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
-        'u' | 'U' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110],
-        'v' | 'V' => [0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100],
-        'w' | 'W' => [0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001],
-        'x' | 'X' => [0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001],
-        'y' | 'Y' => [0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100],
-        'z' | 'Z' => [0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111],
-        ':' => [0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000],
-        '.' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100],
-        '|' => [0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100],
-        ' ' => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
-        '-' => [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
-        '/' => [0b00001, 0b00010, 0b00010, 0b00100, 0b01000, 0b01000, 0b10000],
-        '%' => [0b11001, 0b11010, 0b00010, 0b00100, 0b01000, 0b01011, 0b10011],
-        _ => [0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000],
+        '0' => [
+            0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110,
+        ],
+        '1' => [
+            0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ],
+        '2' => [
+            0b01110, 0b10001, 0b00001, 0b00110, 0b01000, 0b10000, 0b11111,
+        ],
+        '3' => [
+            0b01110, 0b10001, 0b00001, 0b00110, 0b00001, 0b10001, 0b01110,
+        ],
+        '4' => [
+            0b00010, 0b00110, 0b01010, 0b10010, 0b11111, 0b00010, 0b00010,
+        ],
+        '5' => [
+            0b11111, 0b10000, 0b11110, 0b00001, 0b00001, 0b10001, 0b01110,
+        ],
+        '6' => [
+            0b00110, 0b01000, 0b10000, 0b11110, 0b10001, 0b10001, 0b01110,
+        ],
+        '7' => [
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b01000, 0b01000,
+        ],
+        '8' => [
+            0b01110, 0b10001, 0b10001, 0b01110, 0b10001, 0b10001, 0b01110,
+        ],
+        '9' => [
+            0b01110, 0b10001, 0b10001, 0b01111, 0b00001, 0b00010, 0b01100,
+        ],
+        'a' | 'A' => [
+            0b01110, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ],
+        'b' | 'B' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10001, 0b10001, 0b11110,
+        ],
+        'c' | 'C' => [
+            0b01110, 0b10001, 0b10000, 0b10000, 0b10000, 0b10001, 0b01110,
+        ],
+        'd' | 'D' => [
+            0b11110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b11110,
+        ],
+        'e' | 'E' => [
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b11111,
+        ],
+        'f' | 'F' => [
+            0b11111, 0b10000, 0b10000, 0b11110, 0b10000, 0b10000, 0b10000,
+        ],
+        'g' | 'G' => [
+            0b01110, 0b10001, 0b10000, 0b10111, 0b10001, 0b10001, 0b01110,
+        ],
+        'h' | 'H' => [
+            0b10001, 0b10001, 0b10001, 0b11111, 0b10001, 0b10001, 0b10001,
+        ],
+        'i' | 'I' => [
+            0b01110, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110,
+        ],
+        'j' | 'J' => [
+            0b00111, 0b00010, 0b00010, 0b00010, 0b00010, 0b10010, 0b01100,
+        ],
+        'k' | 'K' => [
+            0b10001, 0b10010, 0b10100, 0b11000, 0b10100, 0b10010, 0b10001,
+        ],
+        'l' | 'L' => [
+            0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b10000, 0b11111,
+        ],
+        'm' | 'M' => [
+            0b10001, 0b11011, 0b10101, 0b10101, 0b10001, 0b10001, 0b10001,
+        ],
+        'n' | 'N' => [
+            0b10001, 0b10001, 0b11001, 0b10101, 0b10011, 0b10001, 0b10001,
+        ],
+        'o' | 'O' => [
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ],
+        'p' | 'P' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10000, 0b10000, 0b10000,
+        ],
+        'q' | 'Q' => [
+            0b01110, 0b10001, 0b10001, 0b10001, 0b10101, 0b10010, 0b01101,
+        ],
+        'r' | 'R' => [
+            0b11110, 0b10001, 0b10001, 0b11110, 0b10100, 0b10010, 0b10001,
+        ],
+        's' | 'S' => [
+            0b01110, 0b10001, 0b10000, 0b01110, 0b00001, 0b10001, 0b01110,
+        ],
+        't' | 'T' => [
+            0b11111, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ],
+        'u' | 'U' => [
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01110,
+        ],
+        'v' | 'V' => [
+            0b10001, 0b10001, 0b10001, 0b10001, 0b10001, 0b01010, 0b00100,
+        ],
+        'w' | 'W' => [
+            0b10001, 0b10001, 0b10001, 0b10101, 0b10101, 0b11011, 0b10001,
+        ],
+        'x' | 'X' => [
+            0b10001, 0b10001, 0b01010, 0b00100, 0b01010, 0b10001, 0b10001,
+        ],
+        'y' | 'Y' => [
+            0b10001, 0b10001, 0b01010, 0b00100, 0b00100, 0b00100, 0b00100,
+        ],
+        'z' | 'Z' => [
+            0b11111, 0b00001, 0b00010, 0b00100, 0b01000, 0b10000, 0b11111,
+        ],
+        ':' => [
+            0b00000, 0b00100, 0b00000, 0b00000, 0b00000, 0b00100, 0b00000,
+        ],
+        '.' => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00100,
+        ],
+        '|' => [
+            0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100, 0b00100,
+        ],
+        ' ' => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000,
+        ],
+        '-' => [
+            0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000,
+        ],
+        '/' => [
+            0b00001, 0b00010, 0b00010, 0b00100, 0b01000, 0b01000, 0b10000,
+        ],
+        '%' => [
+            0b11001, 0b11010, 0b00010, 0b00100, 0b01000, 0b01011, 0b10011,
+        ],
+        _ => [
+            0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000, 0b00000,
+        ],
     }
 }
 
@@ -330,11 +437,17 @@ mod tests {
 
     #[test]
     fn test_overlay_position_parse() {
-        assert_eq!(OverlayPosition::from_str("top-left"), OverlayPosition::TopLeft);
-        assert_eq!(OverlayPosition::from_str("top-right"), OverlayPosition::TopRight);
-        assert_eq!(OverlayPosition::from_str("bottom-left"), OverlayPosition::BottomLeft);
-        assert_eq!(OverlayPosition::from_str("br"), OverlayPosition::BottomRight);
-        assert_eq!(OverlayPosition::from_str("invalid"), OverlayPosition::TopLeft);
+        assert_eq!(OverlayPosition::from("top-left"), OverlayPosition::TopLeft);
+        assert_eq!(
+            OverlayPosition::from("top-right"),
+            OverlayPosition::TopRight
+        );
+        assert_eq!(
+            OverlayPosition::from("bottom-left"),
+            OverlayPosition::BottomLeft
+        );
+        assert_eq!(OverlayPosition::from("br"), OverlayPosition::BottomRight);
+        assert_eq!(OverlayPosition::from("invalid"), OverlayPosition::TopLeft);
     }
 
     #[test]
@@ -410,13 +523,21 @@ mod tests {
         // Test that digits return non-zero bitmaps
         for c in '0'..='9' {
             let bitmap = get_char_bitmap(c);
-            assert!(bitmap.iter().any(|&b| b != 0), "Digit {} has empty bitmap", c);
+            assert!(
+                bitmap.iter().any(|&b| b != 0),
+                "Digit {} has empty bitmap",
+                c
+            );
         }
 
         // Test that letters return non-zero bitmaps
         for c in 'A'..='Z' {
             let bitmap = get_char_bitmap(c);
-            assert!(bitmap.iter().any(|&b| b != 0), "Letter {} has empty bitmap", c);
+            assert!(
+                bitmap.iter().any(|&b| b != 0),
+                "Letter {} has empty bitmap",
+                c
+            );
         }
     }
 }

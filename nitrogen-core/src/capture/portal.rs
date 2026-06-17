@@ -6,7 +6,7 @@
 //! - Getting PipeWire node IDs for stream connection
 
 use ashpd::desktop::screencast::{CursorMode as AshpdCursorMode, Screencast, SourceType};
-use ashpd::{enumflags2::BitFlags, WindowIdentifier};
+use ashpd::{WindowIdentifier, enumflags2::BitFlags};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, warn};

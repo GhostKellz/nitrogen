@@ -1,7 +1,7 @@
 //! Integration tests for configuration system
 
 use nitrogen_core::config::{
-    sample_config, CaptureConfig, Codec, ConfigFile, EncoderPreset, Preset,
+    CaptureConfig, Codec, ConfigFile, EncoderPreset, Preset, sample_config,
 };
 use tempfile::TempDir;
 

@@ -85,7 +85,7 @@ impl DrmCapture {
     /// Returns `Unsupported` - this feature is planned but not yet available.
     pub fn new(_device_path: &str) -> Result<Self> {
         Err(NitrogenError::Unsupported(
-            "DRM capture is not yet implemented. Use portal capture (default) instead.".to_string()
+            "DRM capture is not yet implemented. Use portal capture (default) instead.".to_string(),
         ))
     }
 

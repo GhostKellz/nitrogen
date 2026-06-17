@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use nitrogen_core::config::{sample_config, ConfigFile};
+use nitrogen_core::config::{ConfigFile, sample_config};
 
 /// Arguments for the config command
 #[derive(Args)]
@@ -68,10 +68,10 @@ pub async fn config(args: ConfigArgs) -> Result<()> {
             }
 
             // Create parent directory if needed
-            if let Some(parent) = path.parent() {
-                if !parent.exists() {
-                    std::fs::create_dir_all(parent).context("Failed to create config directory")?;
-                }
+            if let Some(parent) = path.parent()
+                && !parent.exists()
+            {
+                std::fs::create_dir_all(parent).context("Failed to create config directory")?;
             }
 
             // Write sample config

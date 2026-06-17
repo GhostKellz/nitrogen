@@ -3,8 +3,8 @@
 //! Combines multiple audio streams (desktop + microphone) into a single output
 //! with configurable volume levels for each source.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::sync::broadcast;
 use tracing::{debug, info, warn};
 
@@ -43,11 +43,7 @@ impl VolumeControl {
 
     /// Get the effective volume (0.0 if muted)
     pub fn effective_volume(&self) -> f32 {
-        if self.muted {
-            0.0
-        } else {
-            self.volume
-        }
+        if self.muted { 0.0 } else { self.volume }
     }
 }
 
@@ -281,7 +277,8 @@ impl AudioMixer {
             // If one source is done, drain the other
             if desktop_done.load(Ordering::SeqCst) {
                 while let Some(mic) = mic_buffer.pop_front() {
-                    let adjusted = self.apply_volume(&mic, self.config.mic_volume.effective_volume());
+                    let adjusted =
+                        self.apply_volume(&mic, self.config.mic_volume.effective_volume());
                     let _ = self.output_tx.send(Arc::new(adjusted));
                 }
             }
@@ -351,11 +348,15 @@ impl AudioMixer {
             // Volume is ~1.0, no need to modify
             frame.samples.clone()
         } else {
-            frame.samples.iter().map(|s| soft_clip(s * volume)).collect()
+            frame
+                .samples
+                .iter()
+                .map(|s| soft_clip(s * volume))
+                .collect()
         };
 
         AudioFrame {
-            format: frame.format.clone(),
+            format: frame.format,
             samples,
             pts: frame.pts,
             sample_count: frame.sample_count,
@@ -477,10 +478,26 @@ mod tests {
         assert_eq!(soft_clip(-0.3), -0.3);
         // Soft clipping region (uses tanh)
         let clipped = soft_clip(2.0);
-        assert!(clipped < 1.0, "soft_clip(2.0) = {} should be < 1.0", clipped);
-        assert!(clipped > 0.9, "soft_clip(2.0) = {} should be > 0.9", clipped);
+        assert!(
+            clipped < 1.0,
+            "soft_clip(2.0) = {} should be < 1.0",
+            clipped
+        );
+        assert!(
+            clipped > 0.9,
+            "soft_clip(2.0) = {} should be > 0.9",
+            clipped
+        );
         let neg_clipped = soft_clip(-2.0);
-        assert!(neg_clipped > -1.0, "soft_clip(-2.0) = {} should be > -1.0", neg_clipped);
-        assert!(neg_clipped < -0.9, "soft_clip(-2.0) = {} should be < -0.9", neg_clipped);
+        assert!(
+            neg_clipped > -1.0,
+            "soft_clip(-2.0) = {} should be > -1.0",
+            neg_clipped
+        );
+        assert!(
+            neg_clipped < -0.9,
+            "soft_clip(-2.0) = {} should be < -0.9",
+            neg_clipped
+        );
     }
 }

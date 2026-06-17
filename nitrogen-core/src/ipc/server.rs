@@ -8,7 +8,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{UnixListener, UnixStream};
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info, warn};
 
 use super::protocol::{IpcMessage, IpcResponse, PipelineStatistics, PipelineStatus};
@@ -55,12 +55,12 @@ impl IpcServer {
         }
 
         // Create parent directory if needed
-        if let Some(parent) = self.socket_path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    NitrogenError::Config(format!("Failed to create socket directory: {}", e))
-                })?;
-            }
+        if let Some(parent) = self.socket_path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                NitrogenError::Config(format!("Failed to create socket directory: {}", e))
+            })?;
         }
 
         // Bind to socket

@@ -63,9 +63,11 @@ fn test_capture_config_for_discord_1080p60() {
     // Should be within Discord's advertised limits
     let warnings = config.validate();
     // 1080p60 should not trigger Discord warnings (it's within their limits)
-    assert!(!warnings
-        .iter()
-        .any(|w| w.contains("Discord") && w.contains("720p")));
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.contains("Discord") && w.contains("720p"))
+    );
 }
 
 #[test]
@@ -118,17 +120,17 @@ fn test_all_preset_bitrates_reasonable() {
         // Just verify we're in a sensible range for each tier
         if width <= 1280 {
             assert!(
-                bitrate >= 2000 && bitrate <= 10000,
+                (2000..=10000).contains(&bitrate),
                 "720p bitrate should be 2-10 Mbps"
             );
         } else if width <= 1920 {
             assert!(
-                bitrate >= 4000 && bitrate <= 15000,
+                (4000..=15000).contains(&bitrate),
                 "1080p bitrate should be 4-15 Mbps"
             );
         } else if width <= 2560 {
             assert!(
-                bitrate >= 6000 && bitrate <= 30000,
+                (6000..=30000).contains(&bitrate),
                 "1440p bitrate should be 6-30 Mbps"
             );
         } else {
@@ -182,9 +184,11 @@ fn test_codec_recommendations() {
     let config = CaptureConfig::monitor("test").with_codec(Codec::H264);
     let warnings = config.validate();
     // H.264 shouldn't generate codec-related warnings for normal presets
-    assert!(!warnings
-        .iter()
-        .any(|w| w.contains("codec") && w.contains("compatible")));
+    assert!(
+        !warnings
+            .iter()
+            .any(|w| w.contains("codec") && w.contains("compatible"))
+    );
 
     // AV1 might warn about compatibility
     let config = CaptureConfig::monitor("test").with_codec(Codec::Av1);

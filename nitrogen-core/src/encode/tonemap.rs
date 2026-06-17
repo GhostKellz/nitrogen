@@ -276,15 +276,9 @@ impl Tonemapper {
         let b = b * scale;
 
         match self.config.algorithm {
-            TonemapAlgorithm::Reinhard => {
-                (reinhard(r), reinhard(g), reinhard(b))
-            }
-            TonemapAlgorithm::Aces => {
-                aces_tonemap(r, g, b)
-            }
-            TonemapAlgorithm::Hable => {
-                (hable(r), hable(g), hable(b))
-            }
+            TonemapAlgorithm::Reinhard => (reinhard(r), reinhard(g), reinhard(b)),
+            TonemapAlgorithm::Aces => aces_tonemap(r, g, b),
+            TonemapAlgorithm::Hable => (hable(r), hable(g), hable(b)),
         }
     }
 
@@ -304,10 +298,10 @@ impl Tonemapper {
 // ============================================================================
 
 /// PQ (ST 2084) constants
-const PQ_M1: f32 = 0.1593017578125;
+const PQ_M1: f32 = 0.15930176;
 const PQ_M2: f32 = 78.84375;
 const PQ_C1: f32 = 0.8359375;
-const PQ_C2: f32 = 18.8515625;
+const PQ_C2: f32 = 18.851562;
 const PQ_C3: f32 = 18.6875;
 
 /// PQ EOTF (Electro-Optical Transfer Function)
@@ -331,7 +325,7 @@ fn pq_eotf(pq: f32) -> f32 {
 /// HLG EOTF constants
 const HLG_A: f32 = 0.17883277;
 const HLG_B: f32 = 0.28466892; // 1 - 4 * HLG_A
-const HLG_C: f32 = 0.55991073; // 0.5 - HLG_A * ln(4 * HLG_A)
+const HLG_C: f32 = 0.5599107; // 0.5 - HLG_A * ln(4 * HLG_A)
 
 /// HLG OETF inverse (signal to scene-linear)
 fn hlg_eotf(hlg: f32) -> f32 {
@@ -404,7 +398,7 @@ fn aces_tonemap(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
         const A: f32 = 0.0245786;
         const B: f32 = 0.000090537;
         const C: f32 = 0.983729;
-        const D: f32 = 0.4329510;
+        const D: f32 = 0.432951;
         const E: f32 = 0.238081;
 
         (x * (x + A) - B) / (x * (C * x + D) + E)
@@ -419,7 +413,11 @@ fn aces_tonemap(r: f32, g: f32, b: f32) -> (f32, f32, f32) {
     let srgb_g = out_r * -0.10208 + out_g * 1.10813 + out_b * -0.00605;
     let srgb_b = out_r * -0.00327 + out_g * -0.07276 + out_b * 1.07602;
 
-    (srgb_r.clamp(0.0, 1.0), srgb_g.clamp(0.0, 1.0), srgb_b.clamp(0.0, 1.0))
+    (
+        srgb_r.clamp(0.0, 1.0),
+        srgb_g.clamp(0.0, 1.0),
+        srgb_b.clamp(0.0, 1.0),
+    )
 }
 
 // ============================================================================
@@ -432,10 +430,22 @@ mod tests {
 
     #[test]
     fn test_tonemap_algorithm_from_str() {
-        assert_eq!("reinhard".parse::<TonemapAlgorithm>().unwrap(), TonemapAlgorithm::Reinhard);
-        assert_eq!("aces".parse::<TonemapAlgorithm>().unwrap(), TonemapAlgorithm::Aces);
-        assert_eq!("hable".parse::<TonemapAlgorithm>().unwrap(), TonemapAlgorithm::Hable);
-        assert_eq!("filmic".parse::<TonemapAlgorithm>().unwrap(), TonemapAlgorithm::Hable);
+        assert_eq!(
+            "reinhard".parse::<TonemapAlgorithm>().unwrap(),
+            TonemapAlgorithm::Reinhard
+        );
+        assert_eq!(
+            "aces".parse::<TonemapAlgorithm>().unwrap(),
+            TonemapAlgorithm::Aces
+        );
+        assert_eq!(
+            "hable".parse::<TonemapAlgorithm>().unwrap(),
+            TonemapAlgorithm::Hable
+        );
+        assert_eq!(
+            "filmic".parse::<TonemapAlgorithm>().unwrap(),
+            TonemapAlgorithm::Hable
+        );
         assert!("invalid".parse::<TonemapAlgorithm>().is_err());
     }
 
@@ -515,8 +525,10 @@ mod tests {
 
     #[test]
     fn test_should_tonemap_forced() {
-        let mut config = TonemapConfig::default();
-        config.mode = TonemapMode::On;
+        let config = TonemapConfig {
+            mode: TonemapMode::On,
+            ..Default::default()
+        };
         let tonemapper = Tonemapper::new(config);
 
         // Forced on always tonemaps
@@ -538,8 +550,8 @@ mod tests {
         let mut frame = vec![
             128, 128, 128, 255, // Pixel 1
             255, 255, 255, 255, // Pixel 2
-            0, 0, 0, 255,       // Pixel 3
-            200, 100, 50, 255,  // Pixel 4
+            0, 0, 0, 255, // Pixel 3
+            200, 100, 50, 255, // Pixel 4
         ];
 
         let original = frame.clone();

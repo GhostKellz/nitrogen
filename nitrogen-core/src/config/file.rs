@@ -570,12 +570,12 @@ impl ConfigFile {
     /// Save configuration to a specific path
     pub fn save_to(&self, path: PathBuf) -> Result<()> {
         // Create parent directory if needed
-        if let Some(parent) = path.parent() {
-            if !parent.exists() {
-                std::fs::create_dir_all(parent).map_err(|e| {
-                    NitrogenError::Config(format!("Failed to create config directory: {}", e))
-                })?;
-            }
+        if let Some(parent) = path.parent()
+            && !parent.exists()
+        {
+            std::fs::create_dir_all(parent).map_err(|e| {
+                NitrogenError::Config(format!("Failed to create config directory: {}", e))
+            })?;
         }
 
         let content = toml::to_string_pretty(self)

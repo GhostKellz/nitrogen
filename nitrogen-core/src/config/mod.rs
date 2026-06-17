@@ -7,8 +7,8 @@ mod file;
 
 pub use av1::{Av1Config, Av1Tier, Av1Tune, ChromaFormat, MultipassMode};
 pub use file::{
-    sample_config, ConfigFile, DetectionSettings, HdrSettings, HotkeySettings,
-    OverlaySettings, PerformanceSettings, WebRTCSettings,
+    ConfigFile, DetectionSettings, HdrSettings, HotkeySettings, OverlaySettings,
+    PerformanceSettings, WebRTCSettings, sample_config,
 };
 
 use crate::encode::{FrameGenMode, TonemapAlgorithm, TonemapMode};
@@ -232,11 +232,7 @@ pub enum Preset {
     #[serde(rename = "4k120")]
     P4k120,
     /// Custom resolution/framerate
-    Custom {
-        width: u32,
-        height: u32,
-        fps: u32,
-    },
+    Custom { width: u32, height: u32, fps: u32 },
 }
 
 impl Preset {

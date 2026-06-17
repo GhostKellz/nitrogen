@@ -39,8 +39,8 @@ zbus = "5.1"
 ashpd = "0.10"
 
 # PipeWire
-pipewire = "0.8"
-libspa = "0.8"
+pipewire = "0.10"
+libspa = "0.10"
 
 # FFmpeg for NVENC
 ffmpeg-next = "8.0"
@@ -58,8 +58,8 @@ bytemuck = { version = "1.19", features = ["derive"] }
 evdev = "0.12"
 
 # Ghost ecosystem
-ghoststream = { git = "https://github.com/ghostkellz/ghoststream" }
-ghostwave-core = { git = "https://github.com/ghostkellz/ghostwave", features = ["pipewire-backend"] }
+ghoststream = { git = "https://github.com/ghostkellz/ghoststream", rev = "0d16576e2837c56681d1e0855c55c6dd6fd948cc" }
+ghostwave-core = { git = "https://github.com/ghostkellz/ghostwave", tag = "v0.3.1", features = ["pipewire-backend"] }
 
 # WebRTC
 webrtc = "0.11"

@@ -1,0 +1,141 @@
+name: Bug report
+description: Report a capture failure, encoding issue, streaming problem, or hardware-specific bug.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing, please gather basic diagnostics:
+
+        ```bash
+        nitrogen-cli --version
+        uname -r
+        nvidia-smi --query-gpu=name,driver_version --format=csv,noheader
+        pw-cli info 0  # PipeWire version
+        ```
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is broken?
+      placeholder: Short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact steps, commands, or actions that reproduce the issue.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Nitrogen version
+      placeholder: nitrogen-cli 0.2.0
+    validations:
+      required: true
+
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution
+      placeholder: Arch Linux / Ubuntu 24.04 / Fedora 42
+    validations:
+      required: true
+
+  - type: input
+    id: kernel
+    attributes:
+      label: Kernel version
+      placeholder: 6.12.x
+    validations:
+      required: true
+
+  - type: input
+    id: driver
+    attributes:
+      label: NVIDIA driver version
+      placeholder: 570.211.01 / 590.48.01 / 595.x
+    validations:
+      required: true
+
+  - type: input
+    id: gpu
+    attributes:
+      label: GPU
+      placeholder: RTX 2060 / RTX 5090 / etc.
+    validations:
+      required: true
+
+  - type: input
+    id: compositor
+    attributes:
+      label: Compositor
+      placeholder: KDE Plasma / GNOME / Hyprland / Sway / COSMIC / Gamescope
+
+  - type: dropdown
+    id: capture_method
+    attributes:
+      label: Capture method
+      options:
+        - xdg-desktop-portal (PipeWire)
+        - Gamescope
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: codec
+    attributes:
+      label: Encoder / codec in use
+      options:
+        - H.264 (NVENC)
+        - HEVC (NVENC)
+        - AV1 (NVENC)
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and diagnostics
+      description: Paste relevant log output, error messages, or screenshots.
+      placeholder: |
+        - RUST_LOG=debug nitrogen-cli ... output
+        - nvidia-smi output
+        - PipeWire errors if applicable
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: What changed before this started?
+      description: Driver update, compositor switch, PipeWire upgrade, kernel update, etc.
+      placeholder: |
+        - kernel update
+        - switched compositor
+        - upgraded PipeWire

@@ -293,24 +293,21 @@ fn detect_compositor() -> String {
 /// Check if running on Steam Deck hardware
 pub fn is_steam_deck_hardware() -> bool {
     // Check /etc/os-release for SteamOS
-    if let Ok(content) = fs::read_to_string("/etc/os-release") {
-        if content.to_lowercase().contains("steamos") {
-            return true;
-        }
+    if let Ok(content) = fs::read_to_string("/etc/os-release")
+        && content.to_lowercase().contains("steamos")
+    {
+        return true;
     }
 
     // Check for Steam Deck specific files
     if fs::metadata("/sys/devices/virtual/dmi/id/product_name")
         .map(|m| m.is_file())
         .unwrap_or(false)
+        && let Ok(product) = fs::read_to_string("/sys/devices/virtual/dmi/id/product_name")
+        && (product.trim().to_lowercase().contains("jupiter")
+            || product.trim().to_lowercase().contains("galileo"))
     {
-        if let Ok(product) = fs::read_to_string("/sys/devices/virtual/dmi/id/product_name") {
-            if product.trim().to_lowercase().contains("jupiter")
-                || product.trim().to_lowercase().contains("galileo")
-            {
-                return true;
-            }
-        }
+        return true;
     }
 
     // Check for deck-specific device
@@ -324,14 +321,14 @@ fn is_gamescope_running() -> bool {
         for entry in entries.flatten() {
             let path = entry.path();
             // Check if this is a numeric directory (PID)
-            if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                if name.chars().all(|c| c.is_ascii_digit()) {
-                    let comm_path = path.join("comm");
-                    if let Ok(comm) = fs::read_to_string(comm_path) {
-                        if comm.trim() == "gamescope" {
-                            return true;
-                        }
-                    }
+            if let Some(name) = path.file_name().and_then(|n| n.to_str())
+                && name.chars().all(|c| c.is_ascii_digit())
+            {
+                let comm_path = path.join("comm");
+                if let Ok(comm) = fs::read_to_string(comm_path)
+                    && comm.trim() == "gamescope"
+                {
+                    return true;
                 }
             }
         }
@@ -352,7 +349,7 @@ pub fn x11_display() -> Option<String> {
 /// Check if PipeWire is available
 pub fn is_pipewire_available() -> bool {
     // Check for PipeWire socket
-    if let Some(runtime_dir) = env::var("XDG_RUNTIME_DIR").ok() {
+    if let Ok(runtime_dir) = env::var("XDG_RUNTIME_DIR") {
         let pipewire_socket = format!("{}/pipewire-0", runtime_dir);
         if fs::metadata(&pipewire_socket).is_ok() {
             return true;

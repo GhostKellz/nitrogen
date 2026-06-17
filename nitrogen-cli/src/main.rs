@@ -39,6 +39,7 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum Commands {
     /// List available capture sources
     #[command(alias = "ls")]
@@ -72,12 +73,14 @@ async fn main() {
         _ => Level::TRACE,
     };
 
-    let filter = EnvFilter::from_default_env()
-        .add_directive(
-            format!("nitrogen={}", level)
+    let filter = EnvFilter::from_default_env().add_directive(
+        format!("nitrogen={}", level).parse().unwrap_or_else(|_| {
+            "nitrogen=warn"
+                .to_string()
                 .parse()
-                .unwrap_or_else(|_| format!("nitrogen=warn").parse().expect("default directive")),
-        );
+                .expect("default directive")
+        }),
+    );
 
     tracing_subscriber::fmt()
         .with_env_filter(filter)
@@ -124,12 +127,16 @@ fn print_error(error: &anyhow::Error) {
 
     if err_str.contains("permission denied") {
         eprintln!();
-        eprintln!("Hint: Check file/device permissions. You may need to add your user to the 'video' group.");
+        eprintln!(
+            "Hint: Check file/device permissions. You may need to add your user to the 'video' group."
+        );
     } else if err_str.contains("connection refused")
         || err_str.contains("no such file") && err_str.contains("socket")
     {
         eprintln!();
-        eprintln!("Hint: The nitrogen daemon may not be running. Start a capture session with: nitrogen cast");
+        eprintln!(
+            "Hint: The nitrogen daemon may not be running. Start a capture session with: nitrogen cast"
+        );
     } else if err_str.contains("nvenc") || err_str.contains("nvidia") {
         eprintln!();
         eprintln!("Hint: Ensure NVIDIA drivers are installed and your GPU supports NVENC.");

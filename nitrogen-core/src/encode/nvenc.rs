@@ -168,7 +168,7 @@ impl NvencEncoder {
                 // Lookahead for better quality (if not low-latency)
                 if av1.lookahead && !config.low_latency {
                     // RTX 50 supports up to 250 frames lookahead
-                    let depth = av1.lookahead_depth.min(250).max(1);
+                    let depth = av1.lookahead_depth.clamp(1, 250);
                     opts.set("rc-lookahead", &depth.to_string());
                 }
 
@@ -398,6 +398,10 @@ impl NvencEncoder {
                 }
                 Err(ffmpeg::Error::Other { errno }) if errno == ffmpeg::error::EAGAIN => {
                     // Need more input frames
+                    break;
+                }
+                Err(ffmpeg::Error::Eof) => {
+                    // Encoder fully drained after send_eof() during flush
                     break;
                 }
                 Err(e) => {

@@ -19,6 +19,7 @@ pub const NVOFFRUC_MIN_RESOURCE: usize = 3;
 /// FRUC API return status codes
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum NvOFFRUC_STATUS {
     SUCCESS = 0,
     ERR_NOT_SUPPORTED = 1,
@@ -60,6 +61,7 @@ pub enum NvOFFRUCResourceType {
 /// Surface format for input/output frames
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum NvOFFRUCSurfaceFormat {
     Undefined = -1,
     NV12 = 0,
@@ -138,7 +140,9 @@ pub union SyncWait {
 
 impl Default for SyncWait {
     fn default() -> Self {
-        Self { fence_wait_value: 0 }
+        Self {
+            fence_wait_value: 0,
+        }
     }
 }
 
@@ -152,12 +156,15 @@ pub union SyncSignal {
 
 impl Default for SyncSignal {
     fn default() -> Self {
-        Self { fence_signal_value: 0 }
+        Self {
+            fence_signal_value: 0,
+        }
     }
 }
 
 /// Input parameters for NvOFFRUCProcess
 #[repr(C)]
+#[derive(Default)]
 pub struct NvOFFRUC_PROCESS_IN_PARAMS {
     /// Input frame data
     pub stFrameDataInput: NvOFFRUC_FRAMEDATA,
@@ -169,19 +176,9 @@ pub struct NvOFFRUC_PROCESS_IN_PARAMS {
     pub uiReserved: [u32; 32],
 }
 
-impl Default for NvOFFRUC_PROCESS_IN_PARAMS {
-    fn default() -> Self {
-        Self {
-            stFrameDataInput: NvOFFRUC_FRAMEDATA::default(),
-            bSkipWarp: 0,
-            uSyncWait: SyncWait::default(),
-            uiReserved: [0; 32],
-        }
-    }
-}
-
 /// Output parameters for NvOFFRUCProcess
 #[repr(C)]
+#[derive(Default)]
 pub struct NvOFFRUC_PROCESS_OUT_PARAMS {
     /// Output frame data
     pub stFrameDataOutput: NvOFFRUC_FRAMEDATA,
@@ -189,16 +186,6 @@ pub struct NvOFFRUC_PROCESS_OUT_PARAMS {
     pub uSyncSignal: SyncSignal,
     /// Reserved
     pub uiReserved: [u32; 32],
-}
-
-impl Default for NvOFFRUC_PROCESS_OUT_PARAMS {
-    fn default() -> Self {
-        Self {
-            stFrameDataOutput: NvOFFRUC_FRAMEDATA::default(),
-            uSyncSignal: SyncSignal::default(),
-            uiReserved: [0; 32],
-        }
-    }
 }
 
 /// Resource registration parameters
@@ -332,13 +319,13 @@ impl NvOFFRUCLib {
                 .get::<FnNvOFFRUCUnregisterResource>(b"NvOFFRUCUnregisterResource")
                 .map_err(|e| format!("Failed to get NvOFFRUCUnregisterResource: {}", e))?;
 
-            let process_fn: FnNvOFFRUCProcess = *lib
-                .get::<FnNvOFFRUCProcess>(b"NvOFFRUCProcess")
-                .map_err(|e| format!("Failed to get NvOFFRUCProcess: {}", e))?;
+            let process_fn: FnNvOFFRUCProcess =
+                *lib.get::<FnNvOFFRUCProcess>(b"NvOFFRUCProcess")
+                    .map_err(|e| format!("Failed to get NvOFFRUCProcess: {}", e))?;
 
-            let destroy_fn: FnNvOFFRUCDestroy = *lib
-                .get::<FnNvOFFRUCDestroy>(b"NvOFFRUCDestroy")
-                .map_err(|e| format!("Failed to get NvOFFRUCDestroy: {}", e))?;
+            let destroy_fn: FnNvOFFRUCDestroy =
+                *lib.get::<FnNvOFFRUCDestroy>(b"NvOFFRUCDestroy")
+                    .map_err(|e| format!("Failed to get NvOFFRUCDestroy: {}", e))?;
 
             Ok(Self {
                 _lib: lib,
@@ -366,7 +353,7 @@ impl NvOFFRUC_STATUS {
     }
 
     /// Convert to a human-readable error message
-    pub fn to_error_string(&self) -> &'static str {
+    pub fn to_error_string(self) -> &'static str {
         match self {
             NvOFFRUC_STATUS::SUCCESS => "Success",
             NvOFFRUC_STATUS::ERR_NOT_SUPPORTED => "Optical flow not supported on this hardware",

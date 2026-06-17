@@ -11,32 +11,32 @@
 //! - `POST /answer` - Accepts SDP answer as JSON
 //! - `GET /status` - Connection status
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tokio::sync::{broadcast, RwLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::sync::{RwLock, broadcast};
 use tracing::{debug, error, info, warn};
 
 use axum::{
+    Router,
     extract::State,
     http::StatusCode,
     response::{Html, IntoResponse, Json},
     routing::{get, post},
-    Router,
 };
 
-use webrtc::api::interceptor_registry::register_default_interceptors;
-use webrtc::api::media_engine::{MediaEngine, MIME_TYPE_H264, MIME_TYPE_OPUS};
 use webrtc::api::APIBuilder;
+use webrtc::api::interceptor_registry::register_default_interceptors;
+use webrtc::api::media_engine::{MIME_TYPE_H264, MIME_TYPE_OPUS, MediaEngine};
 use webrtc::ice_transport::ice_server::RTCIceServer;
 use webrtc::interceptor::registry::Registry;
+use webrtc::media::Sample;
+use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::peer_connection::configuration::RTCConfiguration;
 use webrtc::peer_connection::peer_connection_state::RTCPeerConnectionState;
 use webrtc::peer_connection::sdp::session_description::RTCSessionDescription;
-use webrtc::peer_connection::RTCPeerConnection;
 use webrtc::rtp_transceiver::rtp_codec::RTCRtpCodecCapability;
-use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 use webrtc::track::track_local::TrackLocal;
-use webrtc::media::Sample;
+use webrtc::track::track_local::track_local_static_sample::TrackLocalStaticSample;
 
 use crate::encode::EncodedPacket;
 use crate::error::{NitrogenError, Result};
@@ -108,8 +108,9 @@ impl WebRTCOutput {
 
         // Create interceptor registry
         let mut registry = Registry::new();
-        registry = register_default_interceptors(registry, &mut media_engine)
-            .map_err(|e| NitrogenError::webrtc(format!("Failed to register interceptors: {}", e)))?;
+        registry = register_default_interceptors(registry, &mut media_engine).map_err(|e| {
+            NitrogenError::webrtc(format!("Failed to register interceptors: {}", e))
+        })?;
 
         // Create API
         let api = APIBuilder::new()
@@ -134,10 +135,9 @@ impl WebRTCOutput {
         };
 
         // Create peer connection
-        let peer_connection = api
-            .new_peer_connection(rtc_config)
-            .await
-            .map_err(|e| NitrogenError::webrtc(format!("Failed to create peer connection: {}", e)))?;
+        let peer_connection = api.new_peer_connection(rtc_config).await.map_err(|e| {
+            NitrogenError::webrtc(format!("Failed to create peer connection: {}", e))
+        })?;
 
         let peer_connection = Arc::new(peer_connection);
 
@@ -191,15 +191,17 @@ impl WebRTCOutput {
         }
 
         // Set up connection state callback
-        peer_connection.on_peer_connection_state_change(Box::new(move |state: RTCPeerConnectionState| {
-            info!("WebRTC peer connection state: {:?}", state);
+        peer_connection.on_peer_connection_state_change(Box::new(
+            move |state: RTCPeerConnectionState| {
+                info!("WebRTC peer connection state: {:?}", state);
 
-            if state == RTCPeerConnectionState::Failed {
-                error!("WebRTC peer connection failed");
-            }
+                if state == RTCPeerConnectionState::Failed {
+                    error!("WebRTC peer connection failed");
+                }
 
-            Box::pin(async {})
-        }));
+                Box::pin(async {})
+            },
+        ));
 
         self.peer_connection = Some(peer_connection);
         self.running.store(true, Ordering::SeqCst);
@@ -210,7 +212,9 @@ impl WebRTCOutput {
 
     /// Create an SDP offer for signaling
     pub async fn create_offer(&self) -> Result<String> {
-        let pc = self.peer_connection.as_ref()
+        let pc = self
+            .peer_connection
+            .as_ref()
             .ok_or_else(|| NitrogenError::webrtc("Peer connection not initialized".to_string()))?;
 
         let offer = pc
@@ -218,31 +222,35 @@ impl WebRTCOutput {
             .await
             .map_err(|e| NitrogenError::webrtc(format!("Failed to create offer: {}", e)))?;
 
-        pc.set_local_description(offer.clone())
-            .await
-            .map_err(|e| NitrogenError::webrtc(format!("Failed to set local description: {}", e)))?;
+        pc.set_local_description(offer.clone()).await.map_err(|e| {
+            NitrogenError::webrtc(format!("Failed to set local description: {}", e))
+        })?;
 
         Ok(offer.sdp)
     }
 
     /// Set the remote SDP answer from signaling
     pub async fn set_answer(&self, sdp: &str) -> Result<()> {
-        let pc = self.peer_connection.as_ref()
+        let pc = self
+            .peer_connection
+            .as_ref()
             .ok_or_else(|| NitrogenError::webrtc("Peer connection not initialized".to_string()))?;
 
         let answer = RTCSessionDescription::answer(sdp.to_string())
             .map_err(|e| NitrogenError::webrtc(format!("Invalid SDP answer: {}", e)))?;
 
-        pc.set_remote_description(answer)
-            .await
-            .map_err(|e| NitrogenError::webrtc(format!("Failed to set remote description: {}", e)))?;
+        pc.set_remote_description(answer).await.map_err(|e| {
+            NitrogenError::webrtc(format!("Failed to set remote description: {}", e))
+        })?;
 
         Ok(())
     }
 
     /// Run the WebRTC output, consuming encoded packets from the channel
     pub async fn run(&self, mut video_rx: broadcast::Receiver<Arc<EncodedPacket>>) -> Result<()> {
-        let video_track = self.video_track.as_ref()
+        let video_track = self
+            .video_track
+            .as_ref()
             .ok_or_else(|| NitrogenError::webrtc("Video track not initialized".to_string()))?;
 
         info!("WebRTC output started");
@@ -338,10 +346,7 @@ struct SignalingState {
 /// - `GET /offer` returns the SDP offer
 /// - `POST /answer` accepts the SDP answer
 /// - `GET /status` returns connection status
-pub async fn start_signaling_server(
-    webrtc: Arc<RwLock<WebRTCOutput>>,
-    port: u16,
-) -> Result<()> {
+pub async fn start_signaling_server(webrtc: Arc<RwLock<WebRTCOutput>>, port: u16) -> Result<()> {
     let state = Arc::new(SignalingState { webrtc });
 
     let app = Router::new()
@@ -352,7 +357,10 @@ pub async fn start_signaling_server(
         .with_state(state);
 
     let addr = std::net::SocketAddr::from(([0, 0, 0, 0], port));
-    info!("WebRTC signaling server starting on http://localhost:{}", port);
+    info!(
+        "WebRTC signaling server starting on http://localhost:{}",
+        port
+    );
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await
@@ -371,9 +379,7 @@ async fn viewer_page() -> Html<&'static str> {
 }
 
 /// Get SDP offer endpoint
-async fn get_offer(
-    State(state): State<Arc<SignalingState>>,
-) -> impl IntoResponse {
+async fn get_offer(State(state): State<Arc<SignalingState>>) -> impl IntoResponse {
     let webrtc = state.webrtc.read().await;
 
     match webrtc.create_offer().await {
@@ -408,9 +414,7 @@ async fn set_answer(
 }
 
 /// Get connection status endpoint
-async fn get_status(
-    State(state): State<Arc<SignalingState>>,
-) -> impl IntoResponse {
+async fn get_status(State(state): State<Arc<SignalingState>>) -> impl IntoResponse {
     let webrtc = state.webrtc.read().await;
     let running = webrtc.is_running();
 

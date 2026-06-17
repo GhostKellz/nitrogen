@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use clap::Args;
-use nitrogen_core::{daemon_running, IpcClient};
+use nitrogen_core::{IpcClient, daemon_running};
 
 /// Arguments for the stop command
 #[derive(Args, Debug)]

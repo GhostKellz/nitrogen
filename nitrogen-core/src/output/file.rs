@@ -11,9 +11,9 @@ use crate::config::{AudioCodec, Codec};
 use crate::encode::{EncodedAudioPacket, EncodedPacket};
 use crate::error::{NitrogenError, Result};
 
+use ffmpeg::Rational;
 use ffmpeg::codec::Id;
 use ffmpeg::format::{context::Output, output};
-use ffmpeg::Rational;
 use ffmpeg_next as ffmpeg;
 
 /// File recorder for saving encoded video and audio to disk
@@ -32,6 +32,8 @@ pub struct FileRecorder {
     audio_packets_written: u64,
     /// Whether the header has been written
     header_written: bool,
+    /// Whether the trailer has been written (guards against double write_trailer)
+    trailer_written: bool,
     /// Video time base
     video_time_base: Rational,
     /// Audio time base (if audio enabled)
@@ -115,6 +117,7 @@ impl FileRecorder {
             video_packets_written: 0,
             audio_packets_written: 0,
             header_written: false,
+            trailer_written: false,
             video_time_base,
             audio_time_base: None,
         })
@@ -241,7 +244,7 @@ impl FileRecorder {
 
         self.video_packets_written += 1;
 
-        if self.video_packets_written % 1000 == 0 {
+        if self.video_packets_written.is_multiple_of(1000) {
             debug!(
                 "Written {} video packets to file",
                 self.video_packets_written
@@ -282,7 +285,7 @@ impl FileRecorder {
 
         self.audio_packets_written += 1;
 
-        if self.audio_packets_written % 1000 == 0 {
+        if self.audio_packets_written.is_multiple_of(1000) {
             debug!(
                 "Written {} audio packets to file",
                 self.audio_packets_written
@@ -304,9 +307,14 @@ impl FileRecorder {
             return Ok(());
         }
 
+        if self.trailer_written {
+            return Ok(());
+        }
+
         self.output
             .write_trailer()
             .map_err(|e| NitrogenError::encoder(format!("Failed to write file trailer: {}", e)))?;
+        self.trailer_written = true;
 
         let total_packets = self.video_packets_written + self.audio_packets_written;
         info!(
@@ -340,10 +348,14 @@ impl FileRecorder {
 
 impl Drop for FileRecorder {
     fn drop(&mut self) {
-        if self.header_written {
-            if let Err(e) = self.output.write_trailer() {
-                error!("Failed to write file trailer on drop: {}", e);
-            }
+        // Only write the trailer if the header was written and finalize() did not
+        // already write it. Calling write_trailer() twice corrupts libavformat's
+        // internal state and segfaults.
+        if self.header_written
+            && !self.trailer_written
+            && let Err(e) = self.output.write_trailer()
+        {
+            error!("Failed to write file trailer on drop: {}", e);
         }
     }
 }
@@ -462,5 +474,31 @@ mod tests {
         let path = PathBuf::from("/tmp/test.mkv");
         let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("mp4");
         assert_eq!(ext, "mkv");
+    }
+
+    /// Regression test: calling finalize() more than once (or finalize() followed
+    /// by Drop) must not invoke av_write_trailer twice, which corrupts libavformat
+    /// state and segfaults. The trailer_written guard makes the second call a no-op.
+    #[test]
+    fn test_finalize_is_idempotent() {
+        let path = std::env::temp_dir().join(format!("nitrogen_test_{}.mp4", std::process::id()));
+
+        let mut recorder = FileRecorder::new(&path, Codec::H264, 320, 240, 30, 1000)
+            .expect("failed to create recorder");
+        recorder.write_header().expect("failed to write header");
+
+        // First finalize writes the trailer.
+        recorder.finalize().expect("first finalize failed");
+        assert!(recorder.trailer_written);
+
+        // Second finalize must be a safe no-op (no double write_trailer).
+        recorder
+            .finalize()
+            .expect("second finalize should be a no-op");
+
+        // Drop runs here and must not write the trailer again.
+        drop(recorder);
+
+        let _ = std::fs::remove_file(&path);
     }
 }

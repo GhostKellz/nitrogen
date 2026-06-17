@@ -10,9 +10,9 @@ use pw::spa::pod::Pod;
 use pw::spa::utils::Direction;
 use pw::stream::StreamFlags;
 
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::mpsc;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use tracing::{error, info};
 
@@ -113,10 +113,10 @@ impl VirtualMicrophone {
             // It's OK if the receiver is gone - the thread may have already exited
             let _ = tx.send(());
         }
-        if let Some(thread) = self.pw_thread.take() {
-            if let Err(e) = thread.join() {
-                tracing::warn!("Virtual microphone thread panicked: {:?}", e);
-            }
+        if let Some(thread) = self.pw_thread.take()
+            && let Err(e) = thread.join()
+        {
+            tracing::warn!("Virtual microphone thread panicked: {:?}", e);
         }
     }
 }
@@ -139,14 +139,14 @@ fn run_virtual_mic_loop(
     // Initialize PipeWire
     pw::init();
 
-    let mainloop = pw::main_loop::MainLoop::new(None)
+    let mainloop = pw::main_loop::MainLoopRc::new(None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create main loop: {:?}", e)))?;
 
-    let context = pw::context::Context::new(&mainloop)
+    let context = pw::context::ContextRc::new(&mainloop, None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create context: {:?}", e)))?;
 
     let core = context
-        .connect(None)
+        .connect_rc(None)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to connect to PipeWire: {:?}", e)))?;
 
     // Create audio output stream (appears as a capture device to other apps)
@@ -164,7 +164,7 @@ fn run_virtual_mic_loop(
 
     let shared_for_process = shared.clone();
 
-    let stream = pw::stream::Stream::new(&core, device_name, props)
+    let stream = pw::stream::StreamRc::new(core.clone(), device_name, props)
         .map_err(|e| NitrogenError::pipewire(format!("Failed to create stream: {:?}", e)))?;
 
     // Build format parameters for F32 stereo audio
@@ -284,9 +284,9 @@ fn run_virtual_mic_loop(
         }
 
         // Run one iteration of the main loop
-        mainloop
-            .loop_()
-            .iterate(std::time::Duration::from_millis(10));
+        mainloop.loop_().iterate(pw::loop_::Timeout::Finite(
+            std::time::Duration::from_millis(10),
+        ));
     }
 
     shared.running.store(false, Ordering::SeqCst);
